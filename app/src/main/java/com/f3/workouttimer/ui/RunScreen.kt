@@ -176,7 +176,7 @@ private fun RunContent(engine: TimerEngine, onExit: () -> Unit) {
             modifier = Modifier.align(Alignment.Center).fillMaxWidth().padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            if (engine.phase == RunPhase.RUNNING && interval != null) {
+            if (engine.phase == RunPhase.RUNNING && interval != null && interval.round > 0) {
                 Text(
                     text = "ROUND ${interval.round} / ${engine.timer.rounds}",
                     color = if (isWork) F3DarkGray else F3Gray,

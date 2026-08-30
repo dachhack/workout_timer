@@ -99,6 +99,8 @@ private fun EditForm(
     var work by remember(initial.id) { mutableStateOf(initial.work) }
     var rest by remember(initial.id) { mutableStateOf(initial.rest) }
     var transition by remember(initial.id) { mutableStateOf(initial.transition) }
+    var intro by remember(initial.id) { mutableStateOf(initial.intro) }
+    var outro by remember(initial.id) { mutableStateOf(initial.outro) }
     var announceHalfway by remember(initial.id) { mutableStateOf(initial.announceHalfway) }
     var exercisesText by remember(initial.id) { mutableStateOf(initial.exercises.joinToString("\n")) }
     var voiceName by remember(initial.id) { mutableStateOf(initial.voiceName) }
@@ -110,6 +112,8 @@ private fun EditForm(
         work = work,
         rest = rest,
         transition = transition,
+        intro = intro,
+        outro = outro,
         announceHalfway = announceHalfway,
         exercises = exercisesText.lines().map { it.trim() }.filter { it.isNotEmpty() },
         voiceName = voiceName,
@@ -155,6 +159,13 @@ private fun EditForm(
             RoundsPicker(rounds = rounds, onChange = { rounds = it })
 
             StageEditor(
+                title = "WARM-UP",
+                subtitle = "One block before round 1 — disclaimer, warm-up, instructions",
+                stage = intro,
+                defaultMessage = "Warm up",
+                onChange = { intro = it },
+            )
+            StageEditor(
                 title = "WORK",
                 subtitle = "The pain station",
                 stage = work,
@@ -174,6 +185,13 @@ private fun EditForm(
                 stage = transition,
                 defaultMessage = "Transition",
                 onChange = { transition = it },
+            )
+            StageEditor(
+                title = "COOL-DOWN",
+                subtitle = "One block after the final round — stretch, COT",
+                stage = outro,
+                defaultMessage = "Cool down. Great work.",
+                onChange = { outro = it },
             )
 
             ExercisesEditor(text = exercisesText, onChange = { exercisesText = it })

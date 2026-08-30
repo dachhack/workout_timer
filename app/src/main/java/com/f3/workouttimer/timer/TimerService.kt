@@ -183,7 +183,9 @@ class TimerService : Service() {
                     append(" · ${interval.exercise}")
                 }
                 append(" · ${formatDuration(secondsLeft)}")
-                if (interval != null) append(" · round ${interval.round}/${e.timer.rounds}")
+                if (interval != null && interval.round > 0) {
+                    append(" · round ${interval.round}/${e.timer.rounds}")
+                }
             }
         }
 
