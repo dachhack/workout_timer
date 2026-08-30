@@ -3,7 +3,9 @@ package com.f3.workouttimer.data
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.net.Uri
+import androidx.exifinterface.media.ExifInterface
 import java.io.File
 import java.io.InputStream
 
@@ -31,31 +33,55 @@ object PaxPhotoStore {
 
     fun count(context: Context): Int = photos(context).size
 
-    /** Copies a picked image in, re-encoded down to a sane size for a splash. */
+    /** Copies a picked image in, upright and re-encoded down to a sane size. */
     fun add(context: Context, uri: Uri): Boolean = runCatching {
         val open = { context.contentResolver.openInputStream(uri) as InputStream }
-        val bitmap = decodeSampled(open, MAX_EDGE) ?: return false
+        val decoded = decodeSampled(open, MAX_EDGE) ?: return false
+        // BitmapFactory ignores EXIF, so phone photos arrive sideways without this.
+        val bitmap = applyExifRotation(decoded, open)
         val target = File(dir(context), "pax_${System.currentTimeMillis()}_${uri.hashCode()}.jpg")
         target.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 85, it) }
         bitmap.recycle()
         true
     }.getOrDefault(false)
 
+    private fun applyExifRotation(bitmap: Bitmap, open: () -> InputStream): Bitmap {
+        val degrees = runCatching {
+            val orientation = open().use {
+                ExifInterface(it).getAttributeInt(
+                    ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL
+                )
+            }
+            when (orientation) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                else -> 0f
+            }
+        }.getOrDefault(0f)
+        if (degrees == 0f) return bitmap
+        val matrix = Matrix().apply { postRotate(degrees) }
+        return runCatching {
+            Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                .also { if (it != bitmap) bitmap.recycle() }
+        }.getOrDefault(bitmap)
+    }
+
     fun clear(context: Context) {
         runCatching { photos(context).forEach { it.delete() } }
     }
 
-    /** A random photo, preferring the user's own over anything bundled in assets. */
+    private fun bundled(context: Context): List<String> = runCatching {
+        context.assets.list(DIR).orEmpty()
+            .filter { name -> EXTENSIONS.any { name.lowercase().endsWith(it) } }
+    }.getOrDefault(emptyList())
+
+    /** A random photo from everything available — the app's own and the user's. */
     fun randomBitmap(context: Context): Bitmap? {
-        photos(context).randomOrNull()?.let { file ->
-            decodeSampled({ file.inputStream() }, MAX_EDGE)?.let { return it }
-        }
-        val bundled = runCatching {
-            context.assets.list(DIR).orEmpty()
-                .filter { name -> EXTENSIONS.any { name.lowercase().endsWith(it) } }
-        }.getOrDefault(emptyList())
-        val chosen = bundled.randomOrNull() ?: return null
-        return decodeSampled({ context.assets.open("$DIR/$chosen") }, MAX_EDGE)
+        val sources: List<() -> InputStream> =
+            photos(context).map { file -> { file.inputStream() } } +
+                bundled(context).map { name -> { context.assets.open("$DIR/$name") } }
+        return sources.randomOrNull()?.let { decodeSampled(it, MAX_EDGE) }
     }
 
     /** Decodes at roughly the size the screen needs, so big camera shots don't blow up memory. */
