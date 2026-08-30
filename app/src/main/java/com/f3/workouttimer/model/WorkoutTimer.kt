@@ -120,6 +120,10 @@ data class Interval(
             else -> type.label
         }
 
+    /** The movements of a compound station, for stacking them on screen. */
+    val movements: List<String>
+        get() = splitMovements(displayLabel)
+
     /** What gets spoken when this interval starts. */
     val announcement: String
         get() = when (type) {
@@ -129,6 +133,14 @@ data class Interval(
             else -> message.ifBlank { type.defaultAnnouncement }
         }
 }
+
+/**
+ * Splits one station into the movements it packs in: "5 Squats, 5 Merkins,
+ * 5 Sit-ups" is a single timed work interval covering three movements. Commas
+ * and plus signs both separate.
+ */
+fun splitMovements(station: String): List<String> =
+    station.split(',', '+', '\n').map { it.trim() }.filter { it.isNotEmpty() }
 
 fun formatDuration(totalSeconds: Int): String {
     val m = totalSeconds / 60

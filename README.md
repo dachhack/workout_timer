@@ -15,8 +15,11 @@ with 3-2-1 beeps into each change.
   as you like — e.g. Warm-up → Cardio → Weights → Cool-down. Each block is its
   own circuit with:
   - a name (shown on the run screen and spoken when the block starts),
-  - its own exercise list — every round runs the whole list in order, so three
-    exercises for four rounds is twelve work intervals,
+  - its own exercise list — one line is one timed interval, and every round
+    runs the whole list in order, so three lines for four rounds is twelve
+    work intervals. Several movements on one line, separated by commas, share
+    a single interval: "5 Squats, 5 Merkins, 5 Sit-ups" is one work period
+    covering all three, stacked in large type on the run screen,
   - its own round count, and
   - its own work / rest / transition timings, each optional with an optional
     spoken message.

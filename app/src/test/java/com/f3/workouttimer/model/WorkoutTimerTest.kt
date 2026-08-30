@@ -99,6 +99,44 @@ class WorkoutTimerTest {
     }
 
     @Test
+    fun `a compound station is one work interval covering several movements`() {
+        val block = circuit(
+            "Core",
+            rounds = 2,
+            exercises = listOf("5 Squats, 5 Merkins, 5 Sit-ups"),
+            work = 60,
+            rest = 30,
+        )
+        val intervals = block.intervals()
+        val work = intervals.filter { it.type == StageType.WORK }
+
+        // One timed interval per round, not one per movement.
+        assertEquals(2, work.size)
+        assertEquals(60 + 30 + 60 + 30, block.totalSeconds())
+        assertEquals(
+            listOf("5 Squats", "5 Merkins", "5 Sit-ups"),
+            work[0].movements,
+        )
+        // Spoken as written, so the pauses land between movements.
+        assertEquals("5 Squats, 5 Merkins, 5 Sit-ups", work[0].announcement)
+    }
+
+    @Test
+    fun `separate lines stay separate stations`() {
+        val block = circuit("Circuit", rounds = 1, exercises = listOf("Squats", "Merkins"))
+
+        assertEquals(2, block.intervals().count { it.type == StageType.WORK })
+    }
+
+    @Test
+    fun `plus signs separate movements and blank entries are dropped`() {
+        assertEquals(listOf("Squats", "Merkins"), splitMovements("Squats + Merkins"))
+        assertEquals(listOf("Squats", "Merkins"), splitMovements(" Squats , , Merkins "))
+        assertEquals(listOf("Burpees"), splitMovements("Burpees"))
+        assertTrue(splitMovements("   ").isEmpty())
+    }
+
+    @Test
     fun `an empty workout has no intervals and no length`() {
         val timer = WorkoutTimer(blocks = emptyList())
 

@@ -391,13 +391,20 @@ private fun BlockCard(
                             )
                         },
                         label = { Text("Exercises — one per line") },
-                        placeholder = { Text("Merkins\nSquats\nBurpees", color = F3Gray) },
+                        placeholder = {
+                            Text(
+                                "5 Squats, 5 Merkins, 5 Sit-ups\nBurpees\nPlank",
+                                color = F3Gray,
+                            )
+                        },
                         minLines = 3,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Text(
-                        "Every round runs the whole list in order. Leave empty for a " +
-                            "single timed block.",
+                        "One line = one timed interval, and every round runs the whole " +
+                            "list in order. Put several movements on one line, separated " +
+                            "by commas, to do them all in a single interval before the " +
+                            "rest. Leave empty for a plain timed block.",
                         color = F3Gray,
                         fontSize = 12.sp,
                     )

@@ -51,11 +51,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.f3.workouttimer.model.StageType
 import com.f3.workouttimer.model.formatDuration
+import com.f3.workouttimer.model.splitMovements
 import com.f3.workouttimer.timer.RunPhase
 import com.f3.workouttimer.timer.TimerEngine
 import com.f3.workouttimer.timer.TimerService
@@ -150,6 +152,9 @@ private fun RunContent(engine: TimerEngine, onExit: () -> Unit) {
 
     val secondsLeft = ceil(engine.remainingMs / 1000.0).toInt()
     val upNext = if (engine.phase == RunPhase.RUNNING && !isWork) engine.upNextLabel() else ""
+    val headlineMovements =
+        if (engine.phase == RunPhase.RUNNING && interval != null) interval.movements
+        else listOf(stageLabel)
     // The headline already carries the exercise or block name, so the context
     // line above it only names the block when that adds something.
     val blockLine = interval?.takeIf { engine.phase == RunPhase.RUNNING }?.let { iv ->
@@ -211,13 +216,12 @@ private fun RunContent(engine: TimerEngine, onExit: () -> Unit) {
                 )
             }
             Spacer(Modifier.height(8.dp))
-            Text(
-                text = stageLabel,
+            // A compound station ("5 Squats, 5 Merkins, 5 Sit-ups") stacks so the
+            // PAX can read every movement at a glance.
+            MovementStack(
+                movements = headlineMovements,
                 color = foreground,
-                fontSize = if (stageLabel.length > 14) 28.sp else 36.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 4.sp,
-                textAlign = TextAlign.Center,
+                maxSize = 36.sp,
             )
             if (engine.phase == RunPhase.FINISHED) {
                 Spacer(Modifier.height(16.dp))
@@ -247,14 +251,10 @@ private fun RunContent(engine: TimerEngine, onExit: () -> Unit) {
                         fontWeight = FontWeight.Bold,
                     )
                     Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = upNext.uppercase(),
+                    MovementStack(
+                        movements = splitMovements(upNext),
                         color = foreground,
-                        fontSize = if (upNext.length > 14) 34.sp else 46.sp,
-                        lineHeight = if (upNext.length > 14) 38.sp else 50.sp,
-                        letterSpacing = 2.sp,
-                        fontWeight = FontWeight.Black,
-                        textAlign = TextAlign.Center,
+                        maxSize = 46.sp,
                     )
                 }
                 if (engine.isPaused) {
@@ -357,5 +357,51 @@ private fun RunContent(engine: TimerEngine, onExit: () -> Unit) {
                 TextButton(onClick = { confirmEnd = false }) { Text("Keep going") }
             },
         )
+    }
+}
+
+/**
+ * Renders a station's movements one per line, sized to fit however many there
+ * are and however long they run. One movement just reads as a headline.
+ */
+@Composable
+private fun MovementStack(
+    movements: List<String>,
+    color: Color,
+    maxSize: TextUnit,
+    modifier: Modifier = Modifier,
+) {
+    if (movements.isEmpty()) return
+    val longest = movements.maxOf { it.length }
+    val byCount = when (movements.size) {
+        1 -> 1.0f
+        2 -> 0.85f
+        3 -> 0.72f
+        4 -> 0.6f
+        else -> 0.5f
+    }
+    val byLength = when {
+        longest > 26 -> 0.58f
+        longest > 18 -> 0.72f
+        longest > 12 -> 0.85f
+        else -> 1.0f
+    }
+    val size = maxSize * minOf(byCount, byLength)
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        movements.forEach { movement ->
+            Text(
+                text = movement.uppercase(),
+                color = color,
+                fontSize = size,
+                lineHeight = size * 1.15f,
+                fontWeight = FontWeight.Black,
+                letterSpacing = if (movements.size > 1) 1.sp else 4.sp,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
