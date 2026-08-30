@@ -37,6 +37,11 @@ with 3-2-1 beeps into each change.
   with the screen locked or the app backgrounded. The notification shows the
   live countdown with pause/stop actions; backing out of the run screen
   leaves the workout running, and the home screen shows a resume banner.
+- A splash screen on open: a rotating bit of F3 encouragement ("You working
+  out, bro?", "The fartsack is not your friend.") over a random photo of the
+  PAX. Add photos from the phone's gallery with the camera icon on the home
+  screen, or bundle them by dropping files into `app/src/main/assets/pax/`.
+  Tap to skip; opening the app from the run notification skips it entirely.
 - F3 black-and-white branding throughout.
 
 ## Building
@@ -67,4 +72,6 @@ Unit tests cover the block/interval sequencing and duration math:
 - `timer/TimerService.kt` — foreground service that owns the run: live
   notification, wake lock, pause/stop actions.
 - `audio/WorkoutSounds.kt` — text-to-speech (with voice selection) and tones.
-- `ui/` — Compose screens: home (timer list), edit, and run.
+- `data/PaxPhotoStore.kt` — the splash photos: gallery imports plus any
+  bundled in `assets/pax/`.
+- `ui/` — Compose screens: splash, home (timer list), edit, and run.
