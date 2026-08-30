@@ -140,7 +140,7 @@ private fun RunContent(engine: TimerEngine, onExit: () -> Unit) {
     val stageLabel = when (engine.phase) {
         RunPhase.READY, RunPhase.LEAD_IN -> "GET READY"
         RunPhase.FINISHED -> "DONE"
-        RunPhase.RUNNING -> interval?.type?.label ?: ""
+        RunPhase.RUNNING -> interval?.displayLabel?.uppercase() ?: ""
     }
 
     // WORK inverts the screen to white for maximum contrast mid-beatdown.

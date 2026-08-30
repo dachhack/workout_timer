@@ -178,7 +178,7 @@ class TimerService : Service() {
             else -> buildString {
                 if (e.isPaused) append("Paused · ")
                 val interval = e.currentInterval
-                append(interval?.type?.label ?: "")
+                append(interval?.displayLabel ?: "")
                 if (interval != null && interval.exercise.isNotBlank()) {
                     append(" · ${interval.exercise}")
                 }

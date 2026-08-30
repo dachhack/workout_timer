@@ -11,8 +11,9 @@ stage.
 
 - Create, edit, and delete named timers; they're saved on the device.
 - Three stages per round, each one optional: work, rest, transition.
-- Optional warm-up block before round 1 and cool-down block after the final
-  round, each with its own duration and spoken message.
+- Any number of custom blocks before round 1 and after the final round —
+  each with a name, duration, and optional spoken message (e.g. Disclaimer →
+  Warm-up → rounds → Stretch → COT). Reorder or remove them in the editor.
 - Per-stage spoken message via Android text-to-speech (e.g. "Merkins, go!").
 - Per-round exercise list: one exercise per line in the editor; round N gets
   line N (the list repeats if there are more rounds than lines). The exercise

@@ -92,10 +92,13 @@ class TimerEngine(
 
     private fun announcementFor(index: Int): String {
         val interval = intervals[index]
-        val base = if (interval.type == StageType.WORK && interval.exercise.isNotBlank()) {
-            interval.exercise
-        } else {
-            interval.message.ifBlank { interval.type.defaultAnnouncement }
+        val base = when {
+            interval.type == StageType.WORK && interval.exercise.isNotBlank() ->
+                interval.exercise
+            interval.type == StageType.BLOCK ->
+                interval.message.ifBlank { interval.name.ifBlank { interval.type.defaultAnnouncement } }
+            else ->
+                interval.message.ifBlank { interval.type.defaultAnnouncement }
         }
         if (interval.type == StageType.TRANSITION) {
             val next = nextExercise(index)

@@ -19,6 +19,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -26,6 +29,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -56,6 +60,7 @@ import androidx.compose.ui.unit.sp
 import com.f3.workouttimer.audio.WorkoutSounds
 import com.f3.workouttimer.audio.voiceLabel
 import com.f3.workouttimer.data.TimerRepository
+import com.f3.workouttimer.model.Block
 import com.f3.workouttimer.model.Stage
 import com.f3.workouttimer.model.WorkoutTimer
 import com.f3.workouttimer.model.formatDuration
@@ -99,8 +104,8 @@ private fun EditForm(
     var work by remember(initial.id) { mutableStateOf(initial.work) }
     var rest by remember(initial.id) { mutableStateOf(initial.rest) }
     var transition by remember(initial.id) { mutableStateOf(initial.transition) }
-    var intro by remember(initial.id) { mutableStateOf(initial.intro) }
-    var outro by remember(initial.id) { mutableStateOf(initial.outro) }
+    var blocksBefore by remember(initial.id) { mutableStateOf(initial.blocksBefore) }
+    var blocksAfter by remember(initial.id) { mutableStateOf(initial.blocksAfter) }
     var announceHalfway by remember(initial.id) { mutableStateOf(initial.announceHalfway) }
     var exercisesText by remember(initial.id) { mutableStateOf(initial.exercises.joinToString("\n")) }
     var voiceName by remember(initial.id) { mutableStateOf(initial.voiceName) }
@@ -112,8 +117,8 @@ private fun EditForm(
         work = work,
         rest = rest,
         transition = transition,
-        intro = intro,
-        outro = outro,
+        blocksBefore = blocksBefore,
+        blocksAfter = blocksAfter,
         announceHalfway = announceHalfway,
         exercises = exercisesText.lines().map { it.trim() }.filter { it.isNotEmpty() },
         voiceName = voiceName,
@@ -158,12 +163,11 @@ private fun EditForm(
 
             RoundsPicker(rounds = rounds, onChange = { rounds = it })
 
-            StageEditor(
-                title = "WARM-UP",
-                subtitle = "One block before round 1 — disclaimer, warm-up, instructions",
-                stage = intro,
-                defaultMessage = "Warm up",
-                onChange = { intro = it },
+            BlockListEditor(
+                title = "BLOCKS BEFORE",
+                subtitle = "Run in order before round 1 — disclaimer, warm-up, instructions",
+                blocks = blocksBefore,
+                onChange = { blocksBefore = it },
             )
             StageEditor(
                 title = "WORK",
@@ -186,12 +190,11 @@ private fun EditForm(
                 defaultMessage = "Transition",
                 onChange = { transition = it },
             )
-            StageEditor(
-                title = "COOL-DOWN",
-                subtitle = "One block after the final round — stretch, COT",
-                stage = outro,
-                defaultMessage = "Cool down. Great work.",
-                onChange = { outro = it },
+            BlockListEditor(
+                title = "BLOCKS AFTER",
+                subtitle = "Run in order after the final round — cool-down, stretch, COT",
+                blocks = blocksAfter,
+                onChange = { blocksAfter = it },
             )
 
             ExercisesEditor(text = exercisesText, onChange = { exercisesText = it })
@@ -311,6 +314,125 @@ private fun RoundsPicker(rounds: Int, onChange: (Int) -> Unit) {
             )
             OutlinedButton(onClick = { if (rounds < 99) onChange(rounds + 1) }) { Text("+", fontSize = 20.sp) }
         }
+    }
+}
+
+@Composable
+private fun BlockListEditor(
+    title: String,
+    subtitle: String,
+    blocks: List<Block>,
+    onChange: (List<Block>) -> Unit,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(title, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+            Text(subtitle, color = F3Gray, fontSize = 12.sp)
+
+            blocks.forEachIndexed { index, block ->
+                if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                BlockEditor(
+                    index = index,
+                    count = blocks.size,
+                    block = block,
+                    onChange = { updated ->
+                        onChange(blocks.toMutableList().apply { set(index, updated) })
+                    },
+                    onMove = { delta ->
+                        val target = index + delta
+                        if (target in blocks.indices) {
+                            onChange(blocks.toMutableList().apply {
+                                add(target, removeAt(index))
+                            })
+                        }
+                    },
+                    onDelete = {
+                        onChange(blocks.toMutableList().apply { removeAt(index) })
+                    },
+                )
+            }
+
+            OutlinedButton(
+                onClick = { onChange(blocks + Block()) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("+ ADD BLOCK", letterSpacing = 2.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun BlockEditor(
+    index: Int,
+    count: Int,
+    block: Block,
+    onChange: (Block) -> Unit,
+    onMove: (Int) -> Unit,
+    onDelete: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "BLOCK ${index + 1}",
+                color = F3Gray,
+                fontSize = 12.sp,
+                letterSpacing = 2.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f),
+            )
+            if (count > 1) {
+                IconButton(onClick = { onMove(-1) }, enabled = index > 0) {
+                    Icon(
+                        Icons.Default.KeyboardArrowUp,
+                        contentDescription = "Move up",
+                        tint = if (index > 0) F3Gray else MaterialTheme.colorScheme.surfaceVariant,
+                    )
+                }
+                IconButton(onClick = { onMove(1) }, enabled = index < count - 1) {
+                    Icon(
+                        Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Move down",
+                        tint = if (index < count - 1) F3Gray else MaterialTheme.colorScheme.surfaceVariant,
+                    )
+                }
+            }
+            IconButton(onClick = onDelete) {
+                Icon(Icons.Default.Delete, contentDescription = "Remove block", tint = F3Gray)
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedTextField(
+                value = block.name,
+                onValueChange = { onChange(block.copy(name = it)) },
+                label = { Text("Name") },
+                placeholder = { Text("Warm-up", color = F3Gray) },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+            )
+            OutlinedTextField(
+                value = if (block.seconds == 0) "" else block.seconds.toString(),
+                onValueChange = { text ->
+                    val digits = text.filter { it.isDigit() }.take(4)
+                    onChange(block.copy(seconds = digits.toIntOrNull() ?: 0))
+                },
+                label = { Text("Seconds") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.width(110.dp),
+            )
+        }
+        OutlinedTextField(
+            value = block.message,
+            onValueChange = { onChange(block.copy(message = it)) },
+            label = { Text("Spoken message (optional)") },
+            placeholder = { Text("Default: block name", color = F3Gray) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 

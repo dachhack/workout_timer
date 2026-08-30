@@ -4,11 +4,11 @@ import kotlinx.serialization.Serializable
 import java.util.UUID
 
 enum class StageType(val label: String, val defaultAnnouncement: String) {
-    INTRO("WARM-UP", "Warm up"),
     WORK("WORK", "Work"),
     REST("REST", "Rest"),
     TRANSITION("TRANSITION", "Transition"),
-    OUTRO("COOL-DOWN", "Cool down. Great work."),
+    /** A one-shot custom block outside the rounds (warm-up, disclaimer, stretch, COT…). */
+    BLOCK("BLOCK", "Begin"),
 }
 
 /** The stages that repeat every round, in order. */
@@ -22,6 +22,15 @@ data class Stage(
     val message: String = "",
 )
 
+/** A one-shot custom block that runs before or after the rounds. */
+@Serializable
+data class Block(
+    val name: String = "",
+    val seconds: Int = 60,
+    /** Optional text-to-speech message spoken when the block starts. Blank = speak the name. */
+    val message: String = "",
+)
+
 @Serializable
 data class WorkoutTimer(
     val id: String = UUID.randomUUID().toString(),
@@ -30,10 +39,10 @@ data class WorkoutTimer(
     val work: Stage = Stage(enabled = true, seconds = 45),
     val rest: Stage = Stage(enabled = true, seconds = 15),
     val transition: Stage = Stage(enabled = false, seconds = 10),
-    /** One block before round 1 (warm-up, disclaimer, instructions…). */
-    val intro: Stage = Stage(enabled = false, seconds = 60),
-    /** One block after the final round (cool-down, COT…). */
-    val outro: Stage = Stage(enabled = false, seconds = 60),
+    /** Blocks run in order before round 1 (warm-up, disclaimer, instructions…). */
+    val blocksBefore: List<Block> = emptyList(),
+    /** Blocks run in order after the final round (cool-down, stretch, COT…). */
+    val blocksAfter: List<Block> = emptyList(),
     /** Speak "halfway there" at the midpoint of the whole workout. */
     val announceHalfway: Boolean = false,
     /** Optional exercise names, one per round; repeats if shorter than the round count. */
@@ -44,17 +53,16 @@ data class WorkoutTimer(
     val voiceEngine: String = "",
 ) {
     fun stage(type: StageType): Stage = when (type) {
-        StageType.INTRO -> intro
         StageType.WORK -> work
         StageType.REST -> rest
         StageType.TRANSITION -> transition
-        StageType.OUTRO -> outro
+        StageType.BLOCK -> error("Custom blocks live in blocksBefore/blocksAfter")
     }
 
     /**
-     * The flat sequence of intervals for a full run: the intro block, then
-     * work → rest → transition each round (skipping disabled stages, with rest
-     * and transition dropped after the final round), then the outro block.
+     * The flat sequence of intervals for a full run: the before-blocks in order,
+     * then work → rest → transition each round (skipping disabled stages, with
+     * rest and transition dropped after the final round), then the after-blocks.
      */
     fun exerciseForRound(round: Int): String =
         if (exercises.isEmpty()) "" else exercises[(round - 1) % exercises.size]
@@ -71,17 +79,15 @@ data class WorkoutTimer(
             }
         }
         // End the rounds on the last work interval instead of resting/transitioning
-        // into nothing. Intro/outro sit outside the rounds (round = 0).
+        // into nothing. Custom blocks sit outside the rounds (round = 0).
         val trimmed = full.dropLastWhile { it.type != StageType.WORK }
         val core = if (trimmed.isEmpty()) full else trimmed
+        fun blockInterval(b: Block) =
+            Interval(StageType.BLOCK, b.seconds, 0, b.message, name = b.name)
         return buildList {
-            if (intro.enabled && intro.seconds > 0) {
-                add(Interval(StageType.INTRO, intro.seconds, 0, intro.message))
-            }
+            blocksBefore.filter { it.seconds > 0 }.forEach { add(blockInterval(it)) }
             addAll(core)
-            if (outro.enabled && outro.seconds > 0) {
-                add(Interval(StageType.OUTRO, outro.seconds, 0, outro.message))
-            }
+            blocksAfter.filter { it.seconds > 0 }.forEach { add(blockInterval(it)) }
         }
     }
 
@@ -94,7 +100,12 @@ data class Interval(
     val round: Int,
     val message: String,
     val exercise: String = "",
-)
+    /** Custom display name for BLOCK intervals. */
+    val name: String = "",
+) {
+    val displayLabel: String
+        get() = if (type == StageType.BLOCK) name.ifBlank { "Block" } else type.label
+}
 
 fun formatDuration(totalSeconds: Int): String {
     val m = totalSeconds / 60

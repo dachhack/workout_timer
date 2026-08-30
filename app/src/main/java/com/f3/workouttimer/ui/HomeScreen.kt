@@ -217,11 +217,11 @@ private fun TimerCard(
                 Text(
                     text = buildString {
                         append("${timer.rounds} rounds")
-                        if (timer.intro.enabled) append(" · Warm ${timer.intro.seconds}s")
                         if (timer.work.enabled) append(" · Work ${timer.work.seconds}s")
                         if (timer.rest.enabled) append(" · Rest ${timer.rest.seconds}s")
                         if (timer.transition.enabled) append(" · Trans ${timer.transition.seconds}s")
-                        if (timer.outro.enabled) append(" · Cool ${timer.outro.seconds}s")
+                        val blocks = timer.blocksBefore.size + timer.blocksAfter.size
+                        if (blocks > 0) append(" · $blocks block${if (blocks > 1) "s" else ""}")
                     },
                     color = F3Gray,
                     fontSize = 13.sp,
