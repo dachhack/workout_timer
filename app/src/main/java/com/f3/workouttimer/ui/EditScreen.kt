@@ -102,6 +102,7 @@ private fun EditForm(
     var announceHalfway by remember(initial.id) { mutableStateOf(initial.announceHalfway) }
     var exercisesText by remember(initial.id) { mutableStateOf(initial.exercises.joinToString("\n")) }
     var voiceName by remember(initial.id) { mutableStateOf(initial.voiceName) }
+    var voiceEngine by remember(initial.id) { mutableStateOf(initial.voiceEngine) }
 
     val draft = initial.copy(
         name = name.ifBlank { "Beatdown" },
@@ -112,6 +113,7 @@ private fun EditForm(
         announceHalfway = announceHalfway,
         exercises = exercisesText.lines().map { it.trim() }.filter { it.isNotEmpty() },
         voiceName = voiceName,
+        voiceEngine = voiceEngine,
     )
     val totalSeconds = draft.totalSeconds()
     val valid = totalSeconds > 0
@@ -205,7 +207,13 @@ private fun EditForm(
                 }
             }
 
-            VoicePicker(selectedVoiceName = voiceName, onSelect = { voiceName = it })
+            VoicePicker(
+                selectedEngine = voiceEngine,
+                selectedVoiceName = voiceName,
+                // Voices are engine-specific, so switching engines resets the voice.
+                onSelectEngine = { voiceEngine = it; voiceName = "" },
+                onSelectVoice = { voiceName = it },
+            )
 
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -316,15 +324,29 @@ private fun ExercisesEditor(text: String, onChange: (String) -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun VoicePicker(selectedVoiceName: String, onSelect: (String) -> Unit) {
+private fun VoicePicker(
+    selectedEngine: String,
+    selectedVoiceName: String,
+    onSelectEngine: (String) -> Unit,
+    onSelectVoice: (String) -> Unit,
+) {
     val context = LocalContext.current
-    val sounds = remember { WorkoutSounds(context) }
-    DisposableEffect(Unit) { onDispose { sounds.release() } }
+    // A TTS instance is bound to one engine, so switching engines rebuilds it.
+    val sounds = remember(selectedEngine) { WorkoutSounds(context, selectedEngine) }
+    DisposableEffect(sounds) { onDispose { sounds.release() } }
 
     var showDialog by remember { mutableStateOf(false) }
     val voices = if (sounds.isReady) sounds.availableVoices() else emptyList()
-    val selectedLabel = when {
-        selectedVoiceName.isBlank() -> "Device default"
+    val engines = sounds.availableEngines()
+
+    val engineLabel = when {
+        selectedEngine.isBlank() ->
+            engines.firstOrNull { it.name == sounds.defaultEngineName() }
+                ?.let { "${it.label} (default)" } ?: "Default engine"
+        else -> engines.firstOrNull { it.name == selectedEngine }?.label ?: selectedEngine
+    }
+    val voiceText = when {
+        selectedVoiceName.isBlank() -> "Engine default voice"
         else -> voices.firstOrNull { it.name == selectedVoiceName }?.let { voiceLabel(it) }
             ?: selectedVoiceName
     }
@@ -342,7 +364,8 @@ private fun VoicePicker(selectedVoiceName: String, onSelect: (String) -> Unit) {
         ) {
             Column(Modifier.weight(1f)) {
                 Text("VOICE", fontWeight = FontWeight.Black, letterSpacing = 2.sp)
-                Text(selectedLabel, color = F3Gray, fontSize = 12.sp)
+                Text(engineLabel, color = F3Gray, fontSize = 12.sp)
+                Text(voiceText, color = F3Gray, fontSize = 12.sp)
             }
             Icon(Icons.Default.RecordVoiceOver, contentDescription = null, tint = F3Gray)
         }
@@ -353,16 +376,34 @@ private fun VoicePicker(selectedVoiceName: String, onSelect: (String) -> Unit) {
             onDismissRequest = { showDialog = false },
             title = { Text("Voice") },
             text = {
-                if (!sounds.isReady) {
-                    Text("Loading voices…", color = F3Gray)
-                } else {
-                    LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
+                LazyColumn(modifier = Modifier.heightIn(max = 440.dp)) {
+                    if (engines.size > 1) {
+                        item { SectionLabel("ENGINE") }
                         item {
                             VoiceRow(
                                 label = "Device default",
+                                selected = selectedEngine.isBlank(),
+                                onClick = { onSelectEngine("") },
+                            )
+                        }
+                        items(engines, key = { it.name }) { eng ->
+                            VoiceRow(
+                                label = eng.label,
+                                selected = eng.name == selectedEngine,
+                                onClick = { onSelectEngine(eng.name) },
+                            )
+                        }
+                        item { SectionLabel("VOICE") }
+                    }
+                    if (!sounds.isReady) {
+                        item { Text("Loading voices…", color = F3Gray) }
+                    } else {
+                        item {
+                            VoiceRow(
+                                label = "Engine default voice",
                                 selected = selectedVoiceName.isBlank(),
                                 onClick = {
-                                    onSelect("")
+                                    onSelectVoice("")
                                     sounds.setVoiceByName("")
                                     sounds.speak("Ready to work")
                                 },
@@ -373,7 +414,7 @@ private fun VoicePicker(selectedVoiceName: String, onSelect: (String) -> Unit) {
                                 label = voiceLabel(voice),
                                 selected = voice.name == selectedVoiceName,
                                 onClick = {
-                                    onSelect(voice.name)
+                                    onSelectVoice(voice.name)
                                     sounds.setVoiceByName(voice.name)
                                     sounds.speak("Ready to work")
                                 },
@@ -387,6 +428,18 @@ private fun VoicePicker(selectedVoiceName: String, onSelect: (String) -> Unit) {
             },
         )
     }
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text = text,
+        color = F3Gray,
+        fontSize = 11.sp,
+        letterSpacing = 2.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+    )
 }
 
 @Composable

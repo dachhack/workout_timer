@@ -29,8 +29,10 @@ data class WorkoutTimer(
     val announceHalfway: Boolean = false,
     /** Optional exercise names, one per round; repeats if shorter than the round count. */
     val exercises: List<String> = emptyList(),
-    /** TTS voice name ([android.speech.tts.Voice.getName]); blank = device default. */
+    /** TTS voice name ([android.speech.tts.Voice.getName]); blank = engine default. */
     val voiceName: String = "",
+    /** TTS engine package name; blank = the device's default engine. */
+    val voiceEngine: String = "",
 ) {
     fun stage(type: StageType): Stage = when (type) {
         StageType.WORK -> work

@@ -95,7 +95,12 @@ class TimerService : Service() {
                 stopRun()
                 return@launch
             }
-            val snd = sounds ?: WorkoutSounds(this@TimerService).also { sounds = it }
+            // A TTS instance is bound to one engine; recreate if this timer wants another.
+            val snd = sounds?.takeIf { it.engineName == timer.voiceEngine }
+                ?: run {
+                    sounds?.release()
+                    WorkoutSounds(this@TimerService, timer.voiceEngine).also { sounds = it }
+                }
             acquireWakeLock(timer.totalSeconds())
             engine = TimerEngine(timer, scope, snd, onFinished = { onRunFinished() })
                 .also { it.start() }

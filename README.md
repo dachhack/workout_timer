@@ -16,8 +16,9 @@ stage.
   line N (the list repeats if there are more rounds than lines). The exercise
   is shown big on screen and spoken at the start of each work stage, with an
   "up next" cue during rest and transition.
-- Voice picker per timer: choose any installed text-to-speech voice, with a
-  spoken preview when you select one.
+- Voice picker per timer: choose any installed text-to-speech engine (Google,
+  Samsung, third-party) and any of its voices, with a spoken preview when you
+  select one. Blank keeps the device defaults.
 - Optional halfway call-out spoken at the midpoint of the workout.
 - Rounds picker with a live total-workout-length readout. Rest and transition
   are skipped after the final round, and the total reflects that.

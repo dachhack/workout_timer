@@ -13,8 +13,12 @@ import java.util.Locale
 /**
  * Wraps text-to-speech stage announcements and countdown beeps.
  * Create when a run (or the voice picker) needs it, [release] when done.
+ *
+ * A [TextToSpeech] instance is bound to one engine for its lifetime, so
+ * [engineName] is a constructor parameter; create a fresh instance to switch
+ * engines. Blank means the device's default engine.
  */
-class WorkoutSounds(context: Context) {
+class WorkoutSounds(context: Context, val engineName: String = "") {
 
     var isReady by mutableStateOf(false)
         private set
@@ -22,18 +26,31 @@ class WorkoutSounds(context: Context) {
     private var pendingUtterance: String? = null
     private var pendingVoiceName: String? = null
 
-    private val tts: TextToSpeech = TextToSpeech(context.applicationContext) { status ->
-        if (status == TextToSpeech.SUCCESS) {
-            isReady = true
-            pendingVoiceName?.let { applyVoice(it) }
-            pendingVoiceName = null
-            pendingUtterance?.let { speak(it) }
-            pendingUtterance = null
-        }
-    }.apply { language = Locale.getDefault() }
+    private val tts: TextToSpeech = TextToSpeech(
+        context.applicationContext,
+        { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                isReady = true
+                runCatching { tts.language = Locale.getDefault() }
+                pendingVoiceName?.let { applyVoice(it) }
+                pendingVoiceName = null
+                pendingUtterance?.let { speak(it) }
+                pendingUtterance = null
+            }
+        },
+        engineName.ifBlank { null },
+    )
 
     private val tones: ToneGenerator? =
         runCatching { ToneGenerator(AudioManager.STREAM_MUSIC, 85) }.getOrNull()
+
+    /** All installed TTS engines on the device. */
+    fun availableEngines(): List<TextToSpeech.EngineInfo> =
+        runCatching { tts.engines }.getOrNull().orEmpty()
+
+    /** Package name of the device's default TTS engine. */
+    fun defaultEngineName(): String =
+        runCatching { tts.defaultEngine }.getOrNull().orEmpty()
 
     /** Installed voices, best-quality first. Empty until [isReady]. */
     fun availableVoices(): List<Voice> {
