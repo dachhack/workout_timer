@@ -60,7 +60,6 @@ class TimerEngine(
 
     private val paused = MutableStateFlow(false)
     private var skipRequested = false
-    private var halfwayAnnounced = false
     private var job: Job? = null
 
     fun start() {
@@ -89,12 +88,14 @@ class TimerEngine(
         intervals.drop(afterIndex + 1).firstOrNull { it.type == StageType.WORK }
 
     /**
-     * What to show as "up next" during a rest or transition: the coming
-     * exercise, or the coming block when this block has no exercises.
+     * What comes after [afterIndex]: the coming exercise, or the coming block
+     * when that block has no exercises of its own. Blank when there is nothing
+     * useful to say — the next work interval is more of the same, or the
+     * workout is over.
      */
-    fun upNextLabel(): String {
-        val current = currentInterval ?: return ""
-        val next = nextWork() ?: return ""
+    fun upNextLabel(afterIndex: Int = currentIndex): String {
+        val current = intervals.getOrNull(afterIndex) ?: return ""
+        val next = nextWork(afterIndex) ?: return ""
         val worthShowing = next.exercise.isNotBlank() || next.blockIndex != current.blockIndex
         return if (worthShowing) next.displayLabel else ""
     }
@@ -112,9 +113,10 @@ class TimerEngine(
             } else {
                 base
             }
-        if (interval.type == StageType.TRANSITION) {
-            val label = nextWork(index)?.exercise.orEmpty()
-            if (label.isNotBlank()) return "$withBlock. Next up: $label"
+        val isBreak = interval.type == StageType.REST || interval.type == StageType.TRANSITION
+        if (timer.announceNextExercise && isBreak) {
+            val next = upNextLabel(index)
+            if (next.isNotBlank()) return "$withBlock. Next up: $next"
         }
         return withBlock
     }
@@ -152,12 +154,6 @@ class TimerEngine(
             if (whole < lastWhole) {
                 lastWhole = whole
                 if (whole in 1..3) sounds.countdownBeep()
-            }
-            if (timer.announceHalfway && !halfwayAnnounced &&
-                phase == RunPhase.RUNNING && elapsedSeconds * 2 >= totalSeconds
-            ) {
-                halfwayAnnounced = true
-                sounds.speak("Halfway there. Keep pushing.")
             }
         }
         remainingMs = 0

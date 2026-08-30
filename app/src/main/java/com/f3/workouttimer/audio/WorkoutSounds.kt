@@ -1,9 +1,14 @@
 package com.f3.workouttimer.audio
 
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.ToneGenerator
+import android.os.Handler
+import android.os.Looper
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -17,6 +22,10 @@ import java.util.Locale
  * A [TextToSpeech] instance is bound to one engine for its lifetime, so
  * [engineName] is a constructor parameter; create a fresh instance to switch
  * engines. Blank means the device's default engine.
+ *
+ * Announcements duck whatever else is playing — a music app on the phone or a
+ * Bluetooth speaker — for as long as they last, the same way navigation
+ * guidance does, then hand the volume back.
  */
 class WorkoutSounds(context: Context, val engineName: String = "") {
 
@@ -26,12 +35,28 @@ class WorkoutSounds(context: Context, val engineName: String = "") {
     private var pendingUtterance: String? = null
     private var pendingVoiceName: String? = null
 
+    private val appContext = context.applicationContext
+    private val audioManager = appContext.getSystemService(AudioManager::class.java)
+    private val handler = Handler(Looper.getMainLooper())
+
+    private val audioAttributes = AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+        .build()
+
+    /** Sounds currently playing; the duck lifts when the last one finishes. */
+    private val playing = mutableSetOf<String>()
+    private var focusRequest: AudioFocusRequest? = null
+
     private val tts: TextToSpeech = TextToSpeech(
-        context.applicationContext,
+        appContext,
         { status ->
             if (status == TextToSpeech.SUCCESS) {
                 isReady = true
-                runCatching { tts.language = Locale.getDefault() }
+                runCatching {
+                    tts.language = Locale.getDefault()
+                    tts.setAudioAttributes(audioAttributes)
+                }
                 pendingVoiceName?.let { applyVoice(it) }
                 pendingVoiceName = null
                 pendingUtterance?.let { speak(it) }
@@ -39,7 +64,18 @@ class WorkoutSounds(context: Context, val engineName: String = "") {
             }
         },
         engineName.ifBlank { null },
-    )
+    ).apply {
+        setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) = Unit
+            override fun onDone(utteranceId: String?) = endSound(utteranceId)
+            override fun onStop(utteranceId: String?, interrupted: Boolean) = endSound(utteranceId)
+
+            @Deprecated("Required by the base class", ReplaceWith(""))
+            override fun onError(utteranceId: String?) = endSound(utteranceId)
+
+            override fun onError(utteranceId: String?, errorCode: Int) = endSound(utteranceId)
+        })
+    }
 
     private val tones: ToneGenerator? =
         runCatching { ToneGenerator(AudioManager.STREAM_MUSIC, 85) }.getOrNull()
@@ -86,23 +122,77 @@ class WorkoutSounds(context: Context, val engineName: String = "") {
             pendingUtterance = text
             return
         }
-        tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "f3-${System.nanoTime()}")
+        val id = "f3-${System.nanoTime()}"
+        beginSound(id)
+        val result = tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, id)
+        if (result != TextToSpeech.SUCCESS) {
+            endSound(id)
+            return
+        }
+        // If the engine never reports back, don't hold the duck forever.
+        handler.postDelayed({ endSound(id) }, SPEECH_TIMEOUT_MS)
     }
 
     /** Short tick for the 3-2-1 countdown at the end of a stage. */
-    fun countdownBeep() {
-        tones?.startTone(ToneGenerator.TONE_PROP_BEEP, 150)
-    }
+    fun countdownBeep() = playTone(ToneGenerator.TONE_PROP_BEEP, 150)
 
     /** Longer tone marking a stage change. */
-    fun stageBeep() {
-        tones?.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 400)
+    fun stageBeep() = playTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 400)
+
+    private fun playTone(tone: Int, durationMs: Int) {
+        val generator = tones ?: return
+        val id = "tone-${System.nanoTime()}"
+        beginSound(id)
+        runCatching { generator.startTone(tone, durationMs) }
+            .onFailure { endSound(id) }
+            .onSuccess { handler.postDelayed({ endSound(id) }, durationMs + 200L) }
+    }
+
+    @Synchronized
+    private fun beginSound(id: String) {
+        if (playing.isEmpty()) requestDuck()
+        playing.add(id)
+    }
+
+    /** Idempotent, so a timeout and a real callback can both fire safely. */
+    @Synchronized
+    private fun endSound(id: String?) {
+        if (id == null) return
+        if (playing.remove(id) && playing.isEmpty()) abandonDuck()
+    }
+
+    private fun requestDuck() {
+        val manager = audioManager ?: return
+        runCatching {
+            val request = AudioFocusRequest
+                .Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                .setAudioAttributes(audioAttributes)
+                .setWillPauseWhenDucked(false)
+                .build()
+            focusRequest = request
+            manager.requestAudioFocus(request)
+        }
+    }
+
+    private fun abandonDuck() {
+        val manager = audioManager ?: return
+        focusRequest?.let { request -> runCatching { manager.abandonAudioFocusRequest(request) } }
+        focusRequest = null
     }
 
     fun release() {
+        handler.removeCallbacksAndMessages(null)
         tts.stop()
         tts.shutdown()
         tones?.release()
+        synchronized(this) {
+            playing.clear()
+            abandonDuck()
+        }
+    }
+
+    private companion object {
+        const val SPEECH_TIMEOUT_MS = 20_000L
     }
 }
 

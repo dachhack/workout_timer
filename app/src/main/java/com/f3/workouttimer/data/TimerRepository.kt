@@ -75,9 +75,6 @@ class TimerRepository(private val context: Context) {
         fun int(key: String, default: Int) =
             runCatching { obj[key]?.jsonPrimitive?.int }.getOrNull() ?: default
 
-        fun bool(key: String, default: Boolean) =
-            runCatching { obj[key]?.jsonPrimitive?.boolean }.getOrNull() ?: default
-
         fun stage(key: String, default: Stage) =
             runCatching { obj[key]?.let { json.decodeFromJsonElement(Stage.serializer(), it) } }
                 .getOrNull() ?: default
@@ -140,7 +137,6 @@ class TimerRepository(private val context: Context) {
             id = str("id").ifBlank { java.util.UUID.randomUUID().toString() },
             name = str("name", "Beatdown"),
             blocks = before + main + after,
-            announceHalfway = bool("announceHalfway", false),
             voiceName = str("voiceName"),
             voiceEngine = str("voiceEngine"),
         )

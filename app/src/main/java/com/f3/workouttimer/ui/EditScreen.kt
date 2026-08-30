@@ -108,7 +108,9 @@ private fun EditForm(
     val scope = rememberCoroutineScope()
     var name by remember(initial.id) { mutableStateOf(initial.name) }
     var blocks by remember(initial.id) { mutableStateOf(initial.blocks) }
-    var announceHalfway by remember(initial.id) { mutableStateOf(initial.announceHalfway) }
+    var announceNextExercise by remember(initial.id) {
+        mutableStateOf(initial.announceNextExercise)
+    }
     var voiceName by remember(initial.id) { mutableStateOf(initial.voiceName) }
     var voiceEngine by remember(initial.id) { mutableStateOf(initial.voiceEngine) }
 
@@ -122,7 +124,7 @@ private fun EditForm(
     val draft = initial.copy(
         name = name.ifBlank { "Beatdown" },
         blocks = blocks,
-        announceHalfway = announceHalfway,
+        announceNextExercise = announceNextExercise,
         voiceName = voiceName,
         voiceEngine = voiceEngine,
     )
@@ -223,16 +225,16 @@ private fun EditForm(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("HALFWAY CALL-OUT", fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+                        Text("CALL OUT NEXT EXERCISE", fontWeight = FontWeight.Black, letterSpacing = 2.sp)
                         Text(
-                            "Speaks at the midpoint of the workout",
+                            "Announces what's coming during rest and transition",
                             color = F3Gray,
                             fontSize = 12.sp,
                         )
                     }
                     Switch(
-                        checked = announceHalfway,
-                        onCheckedChange = { announceHalfway = it },
+                        checked = announceNextExercise,
+                        onCheckedChange = { announceNextExercise = it },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = F3Black,
                             checkedTrackColor = F3White,

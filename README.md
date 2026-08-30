@@ -28,11 +28,16 @@ with 3-2-1 beeps into each change.
 - Voice picker per timer: choose any installed text-to-speech engine (Google,
   Samsung, third-party) and any of its voices, with a spoken preview when you
   select one. Blank keeps the device defaults.
-- Optional halfway call-out spoken at the midpoint of the workout.
+- Optional next-exercise call-out (on by default): during rest and transition
+  the app speaks what's coming — "Rest. Next up: Burpees" — and shows it in
+  large type on screen so the PAX can see it from the ground.
 - Run screen: 5-second "Get ready" lead-in, giant countdown, block and round
-  counters, overall progress bar, pause/resume, and skip-stage. Rest and
-  transition show an "up next" cue. The screen stays awake and flips to white
-  during work stages so you can read it from the ground.
+  counters, overall progress bar, pause/resume, and skip-stage. The screen
+  stays awake and flips to white during work stages so you can read it from
+  the ground.
+- Plays well with music: announcements and beeps duck whatever is playing —
+  a phone music app, a Bluetooth speaker — for as long as they last, then
+  hand the volume back, the same way navigation guidance does.
 - The run lives in a foreground service, so it keeps ticking (and talking)
   with the screen locked or the app backgrounded. The notification shows the
   live countdown with pause/stop actions; backing out of the run screen

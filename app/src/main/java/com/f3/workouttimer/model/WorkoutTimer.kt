@@ -85,8 +85,8 @@ data class WorkoutTimer(
     val name: String = "Beatdown",
     /** The whole workout, in order. */
     val blocks: List<Block> = emptyList(),
-    /** Speak "halfway there" at the midpoint of the whole workout. */
-    val announceHalfway: Boolean = false,
+    /** Speak the coming exercise during rest and transition, so the PAX can set up. */
+    val announceNextExercise: Boolean = true,
     /** TTS voice name ([android.speech.tts.Voice.getName]); blank = engine default. */
     val voiceName: String = "",
     /** TTS engine package name; blank = the device's default engine. */

@@ -160,29 +160,36 @@ private fun RunContent(engine: TimerEngine, onExit: () -> Unit) {
         listOfNotNull(named, position.ifBlank { null }).joinToString(" · ")
     }.orEmpty()
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(background)
             .safeDrawingPadding(),
     ) {
-        IconButton(
-            onClick = { if (engine.phase == RunPhase.FINISHED) endWorkout() else confirmEnd = true },
-            modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
-        ) {
-            Icon(Icons.Default.Close, contentDescription = "End workout", tint = foreground)
+        Box(modifier = Modifier.fillMaxWidth()) {
+            IconButton(
+                onClick = {
+                    if (engine.phase == RunPhase.FINISHED) endWorkout() else confirmEnd = true
+                },
+                modifier = Modifier.align(Alignment.CenterStart).padding(8.dp),
+            ) {
+                Icon(Icons.Default.Close, contentDescription = "End workout", tint = foreground)
+            }
+            Text(
+                text = engine.timer.name,
+                color = F3Gray,
+                fontSize = 14.sp,
+                letterSpacing = 2.sp,
+                modifier = Modifier.align(Alignment.Center),
+            )
         }
-        Text(
-            text = engine.timer.name,
-            color = F3Gray,
-            fontSize = 14.sp,
-            letterSpacing = 2.sp,
-            modifier = Modifier.align(Alignment.TopCenter).padding(top = 20.dp),
-        )
 
+        // The middle takes whatever room is left between the header and the
+        // controls, so a long exercise name can never push into them.
         Column(
-            modifier = Modifier.align(Alignment.Center).fillMaxWidth().padding(horizontal = 24.dp),
+            modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
         ) {
             if (blockLine.isNotBlank()) {
                 Text(
@@ -226,16 +233,27 @@ private fun RunContent(engine: TimerEngine, onExit: () -> Unit) {
                 Text(
                     text = formatDuration(secondsLeft),
                     color = foreground,
-                    fontSize = 120.sp,
+                    // Give the coming exercise room to breathe during a break.
+                    fontSize = if (upNext.isNotBlank()) 88.sp else 120.sp,
                     fontWeight = FontWeight.Black,
                 )
                 if (upNext.isNotBlank()) {
+                    Spacer(Modifier.height(12.dp))
                     Text(
-                        text = "NEXT: ${upNext.uppercase()}",
+                        text = "NEXT UP",
                         color = F3Gray,
-                        fontSize = 16.sp,
-                        letterSpacing = 2.sp,
+                        fontSize = 14.sp,
+                        letterSpacing = 4.sp,
                         fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = upNext.uppercase(),
+                        color = foreground,
+                        fontSize = if (upNext.length > 14) 34.sp else 46.sp,
+                        lineHeight = if (upNext.length > 14) 38.sp else 50.sp,
+                        letterSpacing = 2.sp,
+                        fontWeight = FontWeight.Black,
                         textAlign = TextAlign.Center,
                     )
                 }
@@ -252,7 +270,7 @@ private fun RunContent(engine: TimerEngine, onExit: () -> Unit) {
         }
 
         Column(
-            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(24.dp),
+            modifier = Modifier.fillMaxWidth().padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             LinearProgressIndicator(
