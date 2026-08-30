@@ -178,13 +178,16 @@ class TimerService : Service() {
             else -> buildString {
                 if (e.isPaused) append("Paused · ")
                 val interval = e.currentInterval
-                append(interval?.displayLabel ?: "")
-                if (interval != null && interval.exercise.isNotBlank()) {
-                    append(" · ${interval.exercise}")
+                if (interval != null && interval.blockCount > 1 &&
+                    interval.blockName.isNotBlank() &&
+                    !interval.blockName.equals(interval.displayLabel, ignoreCase = true)
+                ) {
+                    append("${interval.blockName} · ")
                 }
+                append(interval?.displayLabel ?: "")
                 append(" · ${formatDuration(secondsLeft)}")
-                if (interval != null && interval.round > 0) {
-                    append(" · round ${interval.round}/${e.timer.rounds}")
+                if (interval != null && interval.roundsInBlock > 1) {
+                    append(" · round ${interval.round}/${interval.roundsInBlock}")
                 }
             }
         }

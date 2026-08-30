@@ -149,8 +149,16 @@ private fun RunContent(engine: TimerEngine, onExit: () -> Unit) {
     val foreground by animateColorAsState(if (isWork) F3Black else F3White, label = "fg")
 
     val secondsLeft = ceil(engine.remainingMs / 1000.0).toInt()
-    val exercise = if (isWork) interval?.exercise.orEmpty() else ""
-    val upNext = if (engine.phase == RunPhase.RUNNING && !isWork) engine.nextExercise() else ""
+    val upNext = if (engine.phase == RunPhase.RUNNING && !isWork) engine.upNextLabel() else ""
+    // The headline already carries the exercise or block name, so the context
+    // line above it only names the block when that adds something.
+    val blockLine = interval?.takeIf { engine.phase == RunPhase.RUNNING }?.let { iv ->
+        val position = if (iv.blockCount > 1) "BLOCK ${iv.blockIndex + 1} / ${iv.blockCount}" else ""
+        val named = iv.blockName.takeIf {
+            it.isNotBlank() && !it.equals(iv.displayLabel, ignoreCase = true)
+        }?.uppercase()
+        listOfNotNull(named, position.ifBlank { null }).joinToString(" · ")
+    }.orEmpty()
 
     Box(
         modifier = Modifier
@@ -176,34 +184,34 @@ private fun RunContent(engine: TimerEngine, onExit: () -> Unit) {
             modifier = Modifier.align(Alignment.Center).fillMaxWidth().padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            if (engine.phase == RunPhase.RUNNING && interval != null && interval.round > 0) {
+            if (blockLine.isNotBlank()) {
                 Text(
-                    text = "ROUND ${interval.round} / ${engine.timer.rounds}",
+                    text = blockLine,
+                    color = if (isWork) F3DarkGray else F3Gray,
+                    fontSize = 14.sp,
+                    letterSpacing = 3.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            if (engine.phase == RunPhase.RUNNING && interval != null && interval.roundsInBlock > 1) {
+                Text(
+                    text = "ROUND ${interval.round} / ${interval.roundsInBlock}",
                     color = if (isWork) F3DarkGray else F3Gray,
                     fontSize = 16.sp,
                     letterSpacing = 3.sp,
                     fontWeight = FontWeight.Bold,
                 )
-                Spacer(Modifier.height(8.dp))
             }
+            Spacer(Modifier.height(8.dp))
             Text(
                 text = stageLabel,
                 color = foreground,
-                fontSize = 36.sp,
+                fontSize = if (stageLabel.length > 14) 28.sp else 36.sp,
                 fontWeight = FontWeight.Black,
-                letterSpacing = 6.sp,
+                letterSpacing = 4.sp,
+                textAlign = TextAlign.Center,
             )
-            if (exercise.isNotBlank()) {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = exercise.uppercase(),
-                    color = foreground,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 2.sp,
-                    textAlign = TextAlign.Center,
-                )
-            }
             if (engine.phase == RunPhase.FINISHED) {
                 Spacer(Modifier.height(16.dp))
                 Text(

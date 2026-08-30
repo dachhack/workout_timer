@@ -84,27 +84,39 @@ class TimerEngine(
         }
     }
 
-    /** The exercise of the next work interval after [afterIndex], for "up next" cues. */
-    fun nextExercise(afterIndex: Int = currentIndex): String =
-        intervals.drop(afterIndex + 1)
-            .firstOrNull { it.type == StageType.WORK && it.exercise.isNotBlank() }
-            ?.exercise ?: ""
+    /** The next work interval after [afterIndex], for "up next" cues. */
+    fun nextWork(afterIndex: Int = currentIndex): Interval? =
+        intervals.drop(afterIndex + 1).firstOrNull { it.type == StageType.WORK }
+
+    /**
+     * What to show as "up next" during a rest or transition: the coming
+     * exercise, or the coming block when this block has no exercises.
+     */
+    fun upNextLabel(): String {
+        val current = currentInterval ?: return ""
+        val next = nextWork() ?: return ""
+        val worthShowing = next.exercise.isNotBlank() || next.blockIndex != current.blockIndex
+        return if (worthShowing) next.displayLabel else ""
+    }
 
     private fun announcementFor(index: Int): String {
         val interval = intervals[index]
-        val base = when {
-            interval.type == StageType.WORK && interval.exercise.isNotBlank() ->
-                interval.exercise
-            interval.type == StageType.BLOCK ->
-                interval.message.ifBlank { interval.name.ifBlank { interval.type.defaultAnnouncement } }
-            else ->
-                interval.message.ifBlank { interval.type.defaultAnnouncement }
-        }
+        val base = interval.announcement
+        // Name the block when the run crosses into a new one.
+        val startsBlock = index == 0 || intervals[index - 1].blockIndex != interval.blockIndex
+        val withBlock =
+            if (startsBlock && interval.blockName.isNotBlank() &&
+                !base.equals(interval.blockName, ignoreCase = true)
+            ) {
+                "${interval.blockName}. $base"
+            } else {
+                base
+            }
         if (interval.type == StageType.TRANSITION) {
-            val next = nextExercise(index)
-            if (next.isNotBlank()) return "$base. Next up: $next"
+            val label = nextWork(index)?.exercise.orEmpty()
+            if (label.isNotBlank()) return "$withBlock. Next up: $label"
         }
-        return base
+        return withBlock
     }
 
     fun togglePause() {

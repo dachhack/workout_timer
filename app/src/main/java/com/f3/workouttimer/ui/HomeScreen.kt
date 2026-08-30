@@ -216,12 +216,14 @@ private fun TimerCard(
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = buildString {
-                        append("${timer.rounds} rounds")
-                        if (timer.work.enabled) append(" · Work ${timer.work.seconds}s")
-                        if (timer.rest.enabled) append(" · Rest ${timer.rest.seconds}s")
-                        if (timer.transition.enabled) append(" · Trans ${timer.transition.seconds}s")
-                        val blocks = timer.blocksBefore.size + timer.blocksAfter.size
-                        if (blocks > 0) append(" · $blocks block${if (blocks > 1) "s" else ""}")
+                        append("${timer.blocks.size} block")
+                        if (timer.blocks.size != 1) append("s")
+                        val names = timer.blocks.mapNotNull { it.name.ifBlank { null } }
+                        if (names.isNotEmpty()) {
+                            append(" · ")
+                            append(names.take(3).joinToString(", "))
+                            if (names.size > 3) append("…")
+                        }
                     },
                     color = F3Gray,
                     fontSize = 13.sp,

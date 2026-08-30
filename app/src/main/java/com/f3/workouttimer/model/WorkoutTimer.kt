@@ -7,11 +7,9 @@ enum class StageType(val label: String, val defaultAnnouncement: String) {
     WORK("WORK", "Work"),
     REST("REST", "Rest"),
     TRANSITION("TRANSITION", "Transition"),
-    /** A one-shot custom block outside the rounds (warm-up, disclaimer, stretch, COT…). */
-    BLOCK("BLOCK", "Begin"),
 }
 
-/** The stages that repeat every round, in order. */
+/** The stages that run at every station, in order. */
 val ROUND_STAGES = listOf(StageType.WORK, StageType.REST, StageType.TRANSITION)
 
 @Serializable
@@ -22,73 +20,83 @@ data class Stage(
     val message: String = "",
 )
 
-/** A one-shot custom block that runs before or after the rounds. */
+/**
+ * One segment of a workout: a named circuit of exercises repeated for a number
+ * of rounds, with its own work / rest / transition timings.
+ *
+ * Each round runs every exercise in turn (a "station"), so a block of three
+ * exercises for four rounds is twelve work intervals. A block with no
+ * exercises is a plain interval block; a one-round block with only work
+ * enabled is a single timed block — a warm-up, a cool-down, a COT.
+ */
 @Serializable
 data class Block(
-    val name: String = "",
-    val seconds: Int = 60,
-    /** Optional text-to-speech message spoken when the block starts. Blank = speak the name. */
-    val message: String = "",
-)
-
-@Serializable
-data class WorkoutTimer(
     val id: String = UUID.randomUUID().toString(),
-    val name: String = "Beatdown",
-    val rounds: Int = 5,
+    val name: String = "",
+    val rounds: Int = 1,
     val work: Stage = Stage(enabled = true, seconds = 45),
     val rest: Stage = Stage(enabled = true, seconds = 15),
     val transition: Stage = Stage(enabled = false, seconds = 10),
-    /** Blocks run in order before round 1 (warm-up, disclaimer, instructions…). */
-    val blocksBefore: List<Block> = emptyList(),
-    /** Blocks run in order after the final round (cool-down, stretch, COT…). */
-    val blocksAfter: List<Block> = emptyList(),
-    /** Speak "halfway there" at the midpoint of the whole workout. */
-    val announceHalfway: Boolean = false,
-    /** Optional exercise names, one per round; repeats if shorter than the round count. */
+    /** Exercises run in order within each round; empty = one plain work interval. */
     val exercises: List<String> = emptyList(),
-    /** TTS voice name ([android.speech.tts.Voice.getName]); blank = engine default. */
-    val voiceName: String = "",
-    /** TTS engine package name; blank = the device's default engine. */
-    val voiceEngine: String = "",
 ) {
     fun stage(type: StageType): Stage = when (type) {
         StageType.WORK -> work
         StageType.REST -> rest
         StageType.TRANSITION -> transition
-        StageType.BLOCK -> error("Custom blocks live in blocksBefore/blocksAfter")
     }
 
-    /**
-     * The flat sequence of intervals for a full run: the before-blocks in order,
-     * then work → rest → transition each round (skipping disabled stages, with
-     * rest and transition dropped after the final round), then the after-blocks.
-     */
-    fun exerciseForRound(round: Int): String =
-        if (exercises.isEmpty()) "" else exercises[(round - 1) % exercises.size]
+    /** The stations of one round: the exercise list, or a single unnamed station. */
+    fun stations(): List<String> = exercises.ifEmpty { listOf("") }
 
-    fun intervals(): List<Interval> {
-        val full = mutableListOf<Interval>()
+    fun intervals(blockIndex: Int = 0, blockCount: Int = 1): List<Interval> {
+        val result = mutableListOf<Interval>()
         for (round in 1..rounds) {
-            for (type in ROUND_STAGES) {
-                val s = stage(type)
-                if (s.enabled && s.seconds > 0) {
-                    val exercise = if (type == StageType.WORK) exerciseForRound(round) else ""
-                    full.add(Interval(type, s.seconds, round, s.message, exercise))
+            for (exercise in stations()) {
+                for (type in ROUND_STAGES) {
+                    val s = stage(type)
+                    if (s.enabled && s.seconds > 0) {
+                        result.add(
+                            Interval(
+                                type = type,
+                                seconds = s.seconds,
+                                round = round,
+                                roundsInBlock = rounds,
+                                message = s.message,
+                                exercise = if (type == StageType.WORK) exercise else "",
+                                blockName = name,
+                                blockIndex = blockIndex,
+                                blockCount = blockCount,
+                            )
+                        )
+                    }
                 }
             }
         }
-        // End the rounds on the last work interval instead of resting/transitioning
-        // into nothing. Custom blocks sit outside the rounds (round = 0).
-        val trimmed = full.dropLastWhile { it.type != StageType.WORK }
-        val core = if (trimmed.isEmpty()) full else trimmed
-        fun blockInterval(b: Block) =
-            Interval(StageType.BLOCK, b.seconds, 0, b.message, name = b.name)
-        return buildList {
-            blocksBefore.filter { it.seconds > 0 }.forEach { add(blockInterval(it)) }
-            addAll(core)
-            blocksAfter.filter { it.seconds > 0 }.forEach { add(blockInterval(it)) }
-        }
+        return result
+    }
+
+    fun totalSeconds(): Int = intervals().sumOf { it.seconds }
+}
+
+@Serializable
+data class WorkoutTimer(
+    val id: String = UUID.randomUUID().toString(),
+    val name: String = "Beatdown",
+    /** The whole workout, in order. */
+    val blocks: List<Block> = emptyList(),
+    /** Speak "halfway there" at the midpoint of the whole workout. */
+    val announceHalfway: Boolean = false,
+    /** TTS voice name ([android.speech.tts.Voice.getName]); blank = engine default. */
+    val voiceName: String = "",
+    /** TTS engine package name; blank = the device's default engine. */
+    val voiceEngine: String = "",
+) {
+    /** Every block's intervals back to back, trimmed so the workout ends on work. */
+    fun intervals(): List<Interval> {
+        val all = blocks.flatMapIndexed { i, b -> b.intervals(i, blocks.size) }
+        val trimmed = all.dropLastWhile { it.type != StageType.WORK }
+        return if (trimmed.isEmpty()) all else trimmed
     }
 
     fun totalSeconds(): Int = intervals().sumOf { it.seconds }
@@ -98,13 +106,28 @@ data class Interval(
     val type: StageType,
     val seconds: Int,
     val round: Int,
+    val roundsInBlock: Int,
     val message: String,
     val exercise: String = "",
-    /** Custom display name for BLOCK intervals. */
-    val name: String = "",
+    val blockName: String = "",
+    val blockIndex: Int = 0,
+    val blockCount: Int = 1,
 ) {
+    /** The headline on the run screen: the exercise, else the block, else the stage. */
     val displayLabel: String
-        get() = if (type == StageType.BLOCK) name.ifBlank { "Block" } else type.label
+        get() = when (type) {
+            StageType.WORK -> exercise.ifBlank { blockName.ifBlank { type.label } }
+            else -> type.label
+        }
+
+    /** What gets spoken when this interval starts. */
+    val announcement: String
+        get() = when (type) {
+            StageType.WORK -> exercise.ifBlank {
+                message.ifBlank { blockName.ifBlank { type.defaultAnnouncement } }
+            }
+            else -> message.ifBlank { type.defaultAnnouncement }
+        }
 }
 
 fun formatDuration(totalSeconds: Int): String {

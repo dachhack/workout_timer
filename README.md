@@ -1,33 +1,38 @@
 # F3 Workout Timer
 
-An Android interval timer for F3-style beatdowns. Build a timer from three
-optional stages — **Work**, **Rest**, and **Transition** — set the number of
-rounds, and the app totals the workout length. During the run each stage is
-announced with text-to-speech (a custom message per stage, or the stage name
-by default), a big on-screen countdown, and 3-2-1 beeps at the end of every
-stage.
+An Android interval timer for F3-style beatdowns. You program the whole
+workout as a sequence of **blocks** — a warm-up, a cardio circuit, a weights
+circuit, a cool-down, as many as you want. Each block holds its own exercises,
+round count, and **Work** / **Rest** / **Transition** timings, and the app
+totals the length of the whole thing. During the run every block, exercise,
+and stage is announced with text-to-speech over a big on-screen countdown,
+with 3-2-1 beeps into each change.
 
 ## Features
 
 - Create, edit, and delete named timers; they're saved on the device.
-- Three stages per round, each one optional: work, rest, transition.
-- Any number of custom blocks before round 1 and after the final round —
-  each with a name, duration, and optional spoken message (e.g. Disclaimer →
-  Warm-up → rounds → Stretch → COT). Reorder or remove them in the editor.
-- Per-stage spoken message via Android text-to-speech (e.g. "Merkins, go!").
-- Per-round exercise list: one exercise per line in the editor; round N gets
-  line N (the list repeats if there are more rounds than lines). The exercise
-  is shown big on screen and spoken at the start of each work stage, with an
-  "up next" cue during rest and transition.
+- **A workout is a list of blocks**, run top to bottom, and you program as many
+  as you like — e.g. Warm-up → Cardio → Weights → Cool-down. Each block is its
+  own circuit with:
+  - a name (shown on the run screen and spoken when the block starts),
+  - its own exercise list — every round runs the whole list in order, so three
+    exercises for four rounds is twelve work intervals,
+  - its own round count, and
+  - its own work / rest / transition timings, each optional with an optional
+    spoken message.
+  A block with no exercises is a plain interval block; a one-round block with
+  only work enabled is a single timed block (warm-up, cool-down, COT).
+  Blocks can be reordered, collapsed, and removed in the editor.
+- Live total-workout length for the whole timer and for each block. The
+  workout never ends on a dangling rest or transition.
 - Voice picker per timer: choose any installed text-to-speech engine (Google,
   Samsung, third-party) and any of its voices, with a spoken preview when you
   select one. Blank keeps the device defaults.
 - Optional halfway call-out spoken at the midpoint of the workout.
-- Rounds picker with a live total-workout-length readout. Rest and transition
-  are skipped after the final round, and the total reflects that.
-- Run screen: 5-second "Get ready" lead-in, giant countdown, round counter,
-  overall progress bar, pause/resume, and skip-stage. The screen stays awake
-  and flips to white during work stages so you can read it from the ground.
+- Run screen: 5-second "Get ready" lead-in, giant countdown, block and round
+  counters, overall progress bar, pause/resume, and skip-stage. Rest and
+  transition show an "up next" cue. The screen stays awake and flips to white
+  during work stages so you can read it from the ground.
 - The run lives in a foreground service, so it keeps ticking (and talking)
   with the screen locked or the app backgrounded. The notification shows the
   live countdown with pause/stop actions; backing out of the run screen
@@ -45,11 +50,18 @@ Requires JDK 17+ and the Android SDK (API 35).
 The APK lands in `app/build/outputs/apk/debug/app-debug.apk`. Install it with
 `adb install` or open the project in Android Studio and hit Run.
 
+Unit tests cover the block/interval sequencing and duration math:
+
+```sh
+./gradlew testDebugUnitTest
+```
+
 ## Structure
 
-- `model/WorkoutTimer.kt` — timer/stage data model and the interval sequence +
-  total-duration math.
-- `data/TimerRepository.kt` — persistence (Preferences DataStore, JSON).
+- `model/WorkoutTimer.kt` — the timer / block / stage model and the interval
+  sequence + total-duration math.
+- `data/TimerRepository.kt` — persistence (Preferences DataStore, JSON),
+  including migration of timers saved before the block restructure.
 - `timer/TimerEngine.kt` — the run loop: ticking clock, pause/skip, beep and
   speech cues, halfway call-out.
 - `timer/TimerService.kt` — foreground service that owns the run: live
