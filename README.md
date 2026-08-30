@@ -77,10 +77,11 @@ Unit tests cover the block/interval sequencing and duration math:
 - `data/TimerRepository.kt` — persistence (Preferences DataStore, JSON),
   including migration of timers saved before the block restructure.
 - `timer/TimerEngine.kt` — the run loop: ticking clock, pause/skip, beep and
-  speech cues, halfway call-out.
+  speech cues, next-exercise call-out.
 - `timer/TimerService.kt` — foreground service that owns the run: live
   notification, wake lock, pause/stop actions.
-- `audio/WorkoutSounds.kt` — text-to-speech (with voice selection) and tones.
+- `audio/WorkoutSounds.kt` — text-to-speech (voice and engine selection),
+  tones, and the ducking of other audio while they play.
 - `data/PaxPhotoStore.kt` — the splash photos: gallery imports plus any
   bundled in `assets/pax/`.
 - `ui/` — Compose screens: splash, home (timer list), edit, and run.
