@@ -48,6 +48,9 @@ private const val SPLASH_MILLIS = 2400
 
 private val LOADING_MESSAGES = listOf(
     "You working out, bro?",
+    "Time for man boobs of steel.",
+    "Get ready to fart.",
+    "Don't google Merkin.",
     "The fartsack is not your friend.",
     "It's cold, it's dark, let's go.",
     "Somebody's gotta Q.",
@@ -56,7 +59,6 @@ private val LOADING_MESSAGES = listOf(
     "Leave no man where you found him.",
     "The gloom is calling.",
     "Nobody ever regretted showing up.",
-    "Merkins? Merkins.",
     "Counting to 20. Slowly.",
     "Third F is the whole point.",
     "Cinder block sold separately.",
