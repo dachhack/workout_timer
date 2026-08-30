@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -19,17 +20,26 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val launchRunId = intent?.getStringExtra(EXTRA_LAUNCH_RUN_ID)
         setContent {
             F3WorkoutTimerTheme {
-                AppNav()
+                AppNav(launchRunId = launchRunId)
             }
         }
+    }
+
+    companion object {
+        /** Set by the run notification's tap intent to jump straight to the run screen. */
+        const val EXTRA_LAUNCH_RUN_ID = "launch_run_id"
     }
 }
 
 @Composable
-private fun AppNav() {
+private fun AppNav(launchRunId: String?) {
     val nav = rememberNavController()
+    LaunchedEffect(launchRunId) {
+        if (launchRunId != null) nav.navigate("run/$launchRunId")
+    }
     NavHost(navController = nav, startDestination = "home") {
         composable("home") {
             HomeScreen(

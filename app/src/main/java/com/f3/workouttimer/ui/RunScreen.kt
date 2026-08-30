@@ -1,5 +1,16 @@
 package com.f3.workouttimer.ui
 
+import android.Manifest
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.IBinder
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -19,17 +30,19 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,56 +50,91 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.f3.workouttimer.audio.WorkoutSounds
-import com.f3.workouttimer.data.TimerRepository
+import androidx.core.content.ContextCompat
 import com.f3.workouttimer.model.StageType
-import com.f3.workouttimer.model.WorkoutTimer
 import com.f3.workouttimer.model.formatDuration
 import com.f3.workouttimer.timer.RunPhase
 import com.f3.workouttimer.timer.TimerEngine
+import com.f3.workouttimer.timer.TimerService
 import com.f3.workouttimer.ui.theme.F3Black
 import com.f3.workouttimer.ui.theme.F3DarkGray
 import com.f3.workouttimer.ui.theme.F3Gray
 import com.f3.workouttimer.ui.theme.F3White
-import kotlinx.coroutines.flow.first
 import kotlin.math.ceil
 
 @Composable
 fun RunScreen(timerId: String, onExit: () -> Unit) {
     val context = LocalContext.current
-    val repo = remember { TimerRepository.get(context) }
 
-    val timer by produceState<WorkoutTimer?>(initialValue = null) {
-        value = repo.timers.first().find { it.id == timerId }
-    }
-
-    val loaded = timer ?: return
-    RunContent(timer = loaded, onExit = onExit)
-}
-
-@Composable
-private fun RunContent(timer: WorkoutTimer, onExit: () -> Unit) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val sounds = remember { WorkoutSounds(context) }
-    val engine = remember(timer.id) { TimerEngine(timer, scope, sounds) }
-
-    LaunchedEffect(engine) { engine.start() }
-    DisposableEffect(Unit) {
-        onDispose {
-            engine.stop()
-            sounds.release()
+    // Ask for notification permission so the foreground-service notification shows.
+    if (Build.VERSION.SDK_INT >= 33) {
+        val launcher = rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) {}
+        LaunchedEffect(Unit) {
+            val granted = ContextCompat.checkSelfPermission(
+                context, Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!granted) launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 
-    // Keep the screen awake for the whole workout.
+    // The run lives in TimerService so it survives backgrounding; bind to observe it.
+    var service by remember { mutableStateOf<TimerService?>(null) }
+    DisposableEffect(timerId) {
+        TimerService.start(context, timerId)
+        val connection = object : ServiceConnection {
+            override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+                service = (binder as TimerService.LocalBinder).service
+            }
+
+            override fun onServiceDisconnected(name: ComponentName?) {
+                service = null
+            }
+        }
+        context.bindService(
+            Intent(context, TimerService::class.java), connection, Context.BIND_AUTO_CREATE
+        )
+        onDispose { context.unbindService(connection) }
+    }
+
+    // Keep the screen awake while this screen is up.
     val view = LocalView.current
     DisposableEffect(Unit) {
         view.keepScreenOn = true
         onDispose { view.keepScreenOn = false }
     }
+
+    val engine = service?.engine
+    if (engine == null) {
+        Box(
+            modifier = Modifier.fillMaxSize().background(F3Black),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("STARTING…", color = F3Gray, letterSpacing = 4.sp, fontWeight = FontWeight.Bold)
+        }
+        // Backing out now just backgrounds the run; the home banner offers resume.
+        BackHandler { onExit() }
+        return
+    }
+
+    RunContent(engine = engine, onExit = onExit)
+}
+
+@Composable
+private fun RunContent(engine: TimerEngine, onExit: () -> Unit) {
+    val context = LocalContext.current
+    var confirmEnd by remember { mutableStateOf(false) }
+
+    val endWorkout = {
+        TimerService.stop(context)
+        onExit()
+    }
+    // Back backgrounds the run (it keeps going in the service); X ends it.
+    BackHandler { onExit() }
 
     val interval = engine.currentInterval
     val stageLabel = when (engine.phase) {
@@ -101,6 +149,8 @@ private fun RunContent(timer: WorkoutTimer, onExit: () -> Unit) {
     val foreground by animateColorAsState(if (isWork) F3Black else F3White, label = "fg")
 
     val secondsLeft = ceil(engine.remainingMs / 1000.0).toInt()
+    val exercise = if (isWork) interval?.exercise.orEmpty() else ""
+    val upNext = if (engine.phase == RunPhase.RUNNING && !isWork) engine.nextExercise() else ""
 
     Box(
         modifier = Modifier
@@ -109,13 +159,13 @@ private fun RunContent(timer: WorkoutTimer, onExit: () -> Unit) {
             .safeDrawingPadding(),
     ) {
         IconButton(
-            onClick = onExit,
+            onClick = { if (engine.phase == RunPhase.FINISHED) endWorkout() else confirmEnd = true },
             modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
         ) {
-            Icon(Icons.Default.Close, contentDescription = "Exit", tint = foreground)
+            Icon(Icons.Default.Close, contentDescription = "End workout", tint = foreground)
         }
         Text(
-            text = timer.name,
+            text = engine.timer.name,
             color = F3Gray,
             fontSize = 14.sp,
             letterSpacing = 2.sp,
@@ -123,12 +173,12 @@ private fun RunContent(timer: WorkoutTimer, onExit: () -> Unit) {
         )
 
         Column(
-            modifier = Modifier.align(Alignment.Center).fillMaxWidth(),
+            modifier = Modifier.align(Alignment.Center).fillMaxWidth().padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             if (engine.phase == RunPhase.RUNNING && interval != null) {
                 Text(
-                    text = "ROUND ${interval.round} / ${timer.rounds}",
+                    text = "ROUND ${interval.round} / ${engine.timer.rounds}",
                     color = if (isWork) F3DarkGray else F3Gray,
                     fontSize = 16.sp,
                     letterSpacing = 3.sp,
@@ -143,6 +193,17 @@ private fun RunContent(timer: WorkoutTimer, onExit: () -> Unit) {
                 fontWeight = FontWeight.Black,
                 letterSpacing = 6.sp,
             )
+            if (exercise.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = exercise.uppercase(),
+                    color = foreground,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 2.sp,
+                    textAlign = TextAlign.Center,
+                )
+            }
             if (engine.phase == RunPhase.FINISHED) {
                 Spacer(Modifier.height(16.dp))
                 Text(
@@ -160,6 +221,16 @@ private fun RunContent(timer: WorkoutTimer, onExit: () -> Unit) {
                     fontSize = 120.sp,
                     fontWeight = FontWeight.Black,
                 )
+                if (upNext.isNotBlank()) {
+                    Text(
+                        text = "NEXT: ${upNext.uppercase()}",
+                        color = F3Gray,
+                        fontSize = 16.sp,
+                        letterSpacing = 2.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                    )
+                }
                 if (engine.isPaused) {
                     Text(
                         text = "PAUSED",
@@ -199,7 +270,7 @@ private fun RunContent(timer: WorkoutTimer, onExit: () -> Unit) {
                         .background(foreground, CircleShape),
                     contentAlignment = Alignment.Center,
                 ) {
-                    IconButton(onClick = onExit) {
+                    IconButton(onClick = endWorkout) {
                         Icon(
                             Icons.Default.Close,
                             contentDescription = "Done",
@@ -246,5 +317,19 @@ private fun RunContent(timer: WorkoutTimer, onExit: () -> Unit) {
                 }
             }
         }
+    }
+
+    if (confirmEnd) {
+        AlertDialog(
+            onDismissRequest = { confirmEnd = false },
+            title = { Text("End workout?") },
+            text = { Text("The timer will stop. Back out instead to keep it running in the background.") },
+            confirmButton = {
+                TextButton(onClick = { confirmEnd = false; endWorkout() }) { Text("End it") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmEnd = false }) { Text("Keep going") }
+            },
+        )
     }
 }

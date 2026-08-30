@@ -1,5 +1,6 @@
 package com.f3.workouttimer.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -7,13 +8,19 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -28,9 +35,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -44,6 +53,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.f3.workouttimer.audio.WorkoutSounds
+import com.f3.workouttimer.audio.voiceLabel
 import com.f3.workouttimer.data.TimerRepository
 import com.f3.workouttimer.model.Stage
 import com.f3.workouttimer.model.WorkoutTimer
@@ -88,6 +99,9 @@ private fun EditForm(
     var work by remember(initial.id) { mutableStateOf(initial.work) }
     var rest by remember(initial.id) { mutableStateOf(initial.rest) }
     var transition by remember(initial.id) { mutableStateOf(initial.transition) }
+    var announceHalfway by remember(initial.id) { mutableStateOf(initial.announceHalfway) }
+    var exercisesText by remember(initial.id) { mutableStateOf(initial.exercises.joinToString("\n")) }
+    var voiceName by remember(initial.id) { mutableStateOf(initial.voiceName) }
 
     val draft = initial.copy(
         name = name.ifBlank { "Beatdown" },
@@ -95,6 +109,9 @@ private fun EditForm(
         work = work,
         rest = rest,
         transition = transition,
+        announceHalfway = announceHalfway,
+        exercises = exercisesText.lines().map { it.trim() }.filter { it.isNotEmpty() },
+        voiceName = voiceName,
     )
     val totalSeconds = draft.totalSeconds()
     val valid = totalSeconds > 0
@@ -156,6 +173,39 @@ private fun EditForm(
                 defaultMessage = "Transition",
                 onChange = { transition = it },
             )
+
+            ExercisesEditor(text = exercisesText, onChange = { exercisesText = it })
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("HALFWAY CALL-OUT", fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+                        Text(
+                            "Speaks at the midpoint of the workout",
+                            color = F3Gray,
+                            fontSize = 12.sp,
+                        )
+                    }
+                    Switch(
+                        checked = announceHalfway,
+                        onCheckedChange = { announceHalfway = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = F3Black,
+                            checkedTrackColor = F3White,
+                        ),
+                    )
+                }
+            }
+
+            VoicePicker(selectedVoiceName = voiceName, onSelect = { voiceName = it })
 
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -234,6 +284,128 @@ private fun RoundsPicker(rounds: Int, onChange: (Int) -> Unit) {
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
             OutlinedButton(onClick = { if (rounds < 99) onChange(rounds + 1) }) { Text("+", fontSize = 20.sp) }
+        }
+    }
+}
+
+@Composable
+private fun ExercisesEditor(text: String, onChange: (String) -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("EXERCISES", fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+            Text(
+                "One per line — round 1 gets line 1, and the list repeats if there are " +
+                    "more rounds than lines. Shown on screen and spoken when each work stage starts.",
+                color = F3Gray,
+                fontSize = 12.sp,
+            )
+            OutlinedTextField(
+                value = text,
+                onValueChange = onChange,
+                label = { Text("Exercise list") },
+                placeholder = { Text("Merkins\nSquats\nBurpees", color = F3Gray) },
+                minLines = 3,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun VoicePicker(selectedVoiceName: String, onSelect: (String) -> Unit) {
+    val context = LocalContext.current
+    val sounds = remember { WorkoutSounds(context) }
+    DisposableEffect(Unit) { onDispose { sounds.release() } }
+
+    var showDialog by remember { mutableStateOf(false) }
+    val voices = if (sounds.isReady) sounds.availableVoices() else emptyList()
+    val selectedLabel = when {
+        selectedVoiceName.isBlank() -> "Device default"
+        else -> voices.firstOrNull { it.name == selectedVoiceName }?.let { voiceLabel(it) }
+            ?: selectedVoiceName
+    }
+
+    Card(
+        onClick = { showDialog = true },
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("VOICE", fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+                Text(selectedLabel, color = F3Gray, fontSize = 12.sp)
+            }
+            Icon(Icons.Default.RecordVoiceOver, contentDescription = null, tint = F3Gray)
+        }
+    }
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text("Voice") },
+            text = {
+                if (!sounds.isReady) {
+                    Text("Loading voices…", color = F3Gray)
+                } else {
+                    LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
+                        item {
+                            VoiceRow(
+                                label = "Device default",
+                                selected = selectedVoiceName.isBlank(),
+                                onClick = {
+                                    onSelect("")
+                                    sounds.setVoiceByName("")
+                                    sounds.speak("Ready to work")
+                                },
+                            )
+                        }
+                        items(voices, key = { it.name }) { voice ->
+                            VoiceRow(
+                                label = voiceLabel(voice),
+                                selected = voice.name == selectedVoiceName,
+                                onClick = {
+                                    onSelect(voice.name)
+                                    sounds.setVoiceByName(voice.name)
+                                    sounds.speak("Ready to work")
+                                },
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showDialog = false }) { Text("Done") }
+            },
+        )
+    }
+}
+
+@Composable
+private fun VoiceRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            color = if (selected) F3White else F3Gray,
+        )
+        if (selected) {
+            Icon(Icons.Default.Check, contentDescription = "Selected", tint = F3White)
         }
     }
 }

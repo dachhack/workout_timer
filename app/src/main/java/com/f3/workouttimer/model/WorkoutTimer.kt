@@ -25,6 +25,12 @@ data class WorkoutTimer(
     val work: Stage = Stage(enabled = true, seconds = 45),
     val rest: Stage = Stage(enabled = true, seconds = 15),
     val transition: Stage = Stage(enabled = false, seconds = 10),
+    /** Speak "halfway there" at the midpoint of the whole workout. */
+    val announceHalfway: Boolean = false,
+    /** Optional exercise names, one per round; repeats if shorter than the round count. */
+    val exercises: List<String> = emptyList(),
+    /** TTS voice name ([android.speech.tts.Voice.getName]); blank = device default. */
+    val voiceName: String = "",
 ) {
     fun stage(type: StageType): Stage = when (type) {
         StageType.WORK -> work
@@ -37,13 +43,17 @@ data class WorkoutTimer(
      * round, skipping disabled stages. Rest and transition are dropped after the
      * final round — the workout ends on the last active stage.
      */
+    fun exerciseForRound(round: Int): String =
+        if (exercises.isEmpty()) "" else exercises[(round - 1) % exercises.size]
+
     fun intervals(): List<Interval> {
         val full = mutableListOf<Interval>()
         for (round in 1..rounds) {
             for (type in StageType.entries) {
                 val s = stage(type)
                 if (s.enabled && s.seconds > 0) {
-                    full.add(Interval(type, s.seconds, round, s.message))
+                    val exercise = if (type == StageType.WORK) exerciseForRound(round) else ""
+                    full.add(Interval(type, s.seconds, round, s.message, exercise))
                 }
             }
         }
@@ -60,6 +70,7 @@ data class Interval(
     val seconds: Int,
     val round: Int,
     val message: String,
+    val exercise: String = "",
 )
 
 fun formatDuration(totalSeconds: Int): String {

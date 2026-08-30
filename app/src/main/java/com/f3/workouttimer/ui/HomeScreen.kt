@@ -49,6 +49,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.f3.workouttimer.data.TimerRepository
 import com.f3.workouttimer.model.WorkoutTimer
 import com.f3.workouttimer.model.formatDuration
+import com.f3.workouttimer.timer.TimerService
+import com.f3.workouttimer.ui.theme.F3Black
 import com.f3.workouttimer.ui.theme.F3Gray
 import com.f3.workouttimer.ui.theme.F3White
 import kotlinx.coroutines.launch
@@ -85,6 +87,37 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item { F3Header() }
+            TimerService.activeTimerId?.let { activeId ->
+                item {
+                    Card(
+                        onClick = { onRun(activeId) },
+                        colors = CardDefaults.cardColors(containerColor = F3White),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                tint = F3Black,
+                                modifier = Modifier.size(32.dp),
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    "WORKOUT IN PROGRESS",
+                                    color = F3Black,
+                                    fontWeight = FontWeight.Black,
+                                    letterSpacing = 2.sp,
+                                )
+                                Text("Tap to jump back in", color = F3Black, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+            }
             if (timers.isEmpty()) {
                 item {
                     Text(

@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.f3.workouttimer.audio.WorkoutSounds
 import com.f3.workouttimer.model.Interval
+import com.f3.workouttimer.model.StageType
 import com.f3.workouttimer.model.WorkoutTimer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -29,6 +30,7 @@ class TimerEngine(
     val timer: WorkoutTimer,
     private val scope: CoroutineScope,
     private val sounds: WorkoutSounds,
+    private val onFinished: () -> Unit = {},
 ) {
     val intervals: List<Interval> = timer.intervals()
     val totalSeconds: Int = intervals.sumOf { it.seconds }
@@ -58,10 +60,12 @@ class TimerEngine(
 
     private val paused = MutableStateFlow(false)
     private var skipRequested = false
+    private var halfwayAnnounced = false
     private var job: Job? = null
 
     fun start() {
         if (phase != RunPhase.READY || intervals.isEmpty()) return
+        sounds.setVoiceByName(timer.voiceName)
         job = scope.launch {
             phase = RunPhase.LEAD_IN
             sounds.speak("Get ready")
@@ -69,15 +73,35 @@ class TimerEngine(
             for (i in intervals.indices) {
                 currentIndex = i
                 phase = RunPhase.RUNNING
-                val interval = intervals[i]
                 sounds.stageBeep()
-                sounds.speak(interval.message.ifBlank { interval.type.defaultAnnouncement })
-                countdown(interval.seconds)
+                sounds.speak(announcementFor(i))
+                countdown(intervals[i].seconds)
             }
             phase = RunPhase.FINISHED
             sounds.stageBeep()
             sounds.speak("Workout complete. Nice work.")
+            onFinished()
         }
+    }
+
+    /** The exercise of the next work interval after [afterIndex], for "up next" cues. */
+    fun nextExercise(afterIndex: Int = currentIndex): String =
+        intervals.drop(afterIndex + 1)
+            .firstOrNull { it.type == StageType.WORK && it.exercise.isNotBlank() }
+            ?.exercise ?: ""
+
+    private fun announcementFor(index: Int): String {
+        val interval = intervals[index]
+        val base = if (interval.type == StageType.WORK && interval.exercise.isNotBlank()) {
+            interval.exercise
+        } else {
+            interval.message.ifBlank { interval.type.defaultAnnouncement }
+        }
+        if (interval.type == StageType.TRANSITION) {
+            val next = nextExercise(index)
+            if (next.isNotBlank()) return "$base. Next up: $next"
+        }
+        return base
     }
 
     fun togglePause() {
@@ -113,6 +137,12 @@ class TimerEngine(
             if (whole < lastWhole) {
                 lastWhole = whole
                 if (whole in 1..3) sounds.countdownBeep()
+            }
+            if (timer.announceHalfway && !halfwayAnnounced &&
+                phase == RunPhase.RUNNING && elapsedSeconds * 2 >= totalSeconds
+            ) {
+                halfwayAnnounced = true
+                sounds.speak("Halfway there. Keep pushing.")
             }
         }
         remainingMs = 0
