@@ -67,7 +67,10 @@ class TimerEngine(
         sounds.setVoiceByName(timer.voiceName)
         job = scope.launch {
             phase = RunPhase.LEAD_IN
-            sounds.speak(timer.opening)
+            // Hold the lead-in on the clock until the opening message is out,
+            // so a long one is never talked over by the first work interval.
+            remainingMs = LEAD_IN_SECONDS * 1000L
+            sounds.speakAndWait(timer.opening)
             countdown(LEAD_IN_SECONDS)
             for (i in intervals.indices) {
                 currentIndex = i
@@ -78,7 +81,7 @@ class TimerEngine(
             }
             phase = RunPhase.FINISHED
             sounds.stageBeep()
-            sounds.speak(timer.closing)
+            sounds.speakAndWait(timer.closing)
             onFinished()
         }
     }

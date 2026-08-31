@@ -33,12 +33,13 @@ with 3-2-1 beeps into each change.
   select one. Blank keeps the device defaults.
 - Optional opening and closing messages per timer: what the app says as the
   run starts ("Circle up, gentlemen") and once the last interval is done.
-  Leave either blank for the defaults — "Get ready" and "Workout complete.
-  Nice work."
+  The lead-in waits for the opening message to finish before it starts
+  counting down, so a long one is never talked over. Leave either blank for
+  the defaults — "Get ready" and "Workout complete. Nice work."
 - Optional next-exercise call-out (on by default): during rest and transition
   the app speaks what's coming — "Rest. Next up: Burpees" — and shows it in
   large type on screen so the PAX can see it from the ground.
-- Run screen: 5-second "Get ready" lead-in, giant countdown, block and round
+- Run screen: 5-second lead-in, giant countdown, block and round
   counters, overall progress bar, pause/resume, and skip-stage. The screen
   stays awake and flips to white during work stages so you can read it from
   the ground.

@@ -13,6 +13,8 @@ import android.speech.tts.Voice
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Locale
 
 /**
@@ -49,9 +51,16 @@ class WorkoutSounds(context: Context, val engineName: String = "") {
     private val speaking = mutableSetOf<String>()
     private var focusRequest: AudioFocusRequest? = null
 
+    /** Completes once the engine has initialised, with whether it succeeded. */
+    private val ready = CompletableDeferred<Boolean>()
+
+    /** Waiters for [speakAndWait], keyed by utterance id. */
+    private val completions = mutableMapOf<String, CompletableDeferred<Unit>>()
+
     private val tts: TextToSpeech = TextToSpeech(
         appContext,
         { status ->
+            ready.complete(status == TextToSpeech.SUCCESS)
             if (status == TextToSpeech.SUCCESS) {
                 isReady = true
                 runCatching {
@@ -68,13 +77,16 @@ class WorkoutSounds(context: Context, val engineName: String = "") {
     ).apply {
         setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) = Unit
-            override fun onDone(utteranceId: String?) = endSpeech(utteranceId)
-            override fun onStop(utteranceId: String?, interrupted: Boolean) = endSpeech(utteranceId)
+            override fun onDone(utteranceId: String?) = finishUtterance(utteranceId)
+
+            override fun onStop(utteranceId: String?, interrupted: Boolean) =
+                finishUtterance(utteranceId)
 
             @Deprecated("Required by the base class", ReplaceWith(""))
-            override fun onError(utteranceId: String?) = endSpeech(utteranceId)
+            override fun onError(utteranceId: String?) = finishUtterance(utteranceId)
 
-            override fun onError(utteranceId: String?, errorCode: Int) = endSpeech(utteranceId)
+            override fun onError(utteranceId: String?, errorCode: Int) =
+                finishUtterance(utteranceId)
         })
     }
 
@@ -123,15 +135,45 @@ class WorkoutSounds(context: Context, val engineName: String = "") {
             pendingUtterance = text
             return
         }
+        startUtterance(text)
+    }
+
+    /**
+     * Speaks and suspends until the words have actually finished, so a caller
+     * can hold a countdown back until the message is out. Gives up rather than
+     * hanging if the engine never initialises or never reports back.
+     */
+    suspend fun speakAndWait(text: String) {
+        if (text.isBlank()) return
+        val engineReady = withTimeoutOrNull(READY_TIMEOUT_MS) { ready.await() } ?: false
+        if (!engineReady) return
+        val done = CompletableDeferred<Unit>()
+        val id = startUtterance(text, done) ?: return
+        withTimeoutOrNull(SPEECH_TIMEOUT_MS + 500) { done.await() }
+        finishUtterance(id)
+    }
+
+    /** Returns the utterance id, or null if the engine refused to speak. */
+    private fun startUtterance(text: String, waiter: CompletableDeferred<Unit>? = null): String? {
         val id = "f3-${System.nanoTime()}"
+        if (waiter != null) synchronized(this) { completions[id] = waiter }
         beginSpeech(id)
-        val result = tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, id)
-        if (result != TextToSpeech.SUCCESS) {
-            endSpeech(id)
-            return
+        if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, id) != TextToSpeech.SUCCESS) {
+            finishUtterance(id)
+            return null
         }
-        // If the engine never reports back, don't hold the duck forever.
-        handler.postDelayed({ endSpeech(id) }, SPEECH_TIMEOUT_MS)
+        // If the engine never reports back, don't hold the duck — or a waiter —
+        // forever.
+        handler.postDelayed({ finishUtterance(id) }, SPEECH_TIMEOUT_MS)
+        return id
+    }
+
+    /** Idempotent: lifts the duck for this utterance and releases any waiter. */
+    private fun finishUtterance(id: String?) {
+        if (id == null) return
+        endSpeech(id)
+        val waiter = synchronized(this) { completions.remove(id) }
+        waiter?.complete(Unit)
     }
 
     /** Short tick for the 3-2-1 countdown at the end of a stage. */
@@ -185,7 +227,10 @@ class WorkoutSounds(context: Context, val engineName: String = "") {
         tts.stop()
         tts.shutdown()
         tones?.release()
+        ready.complete(false)
         synchronized(this) {
+            completions.values.forEach { it.complete(Unit) }
+            completions.clear()
             speaking.clear()
             abandonDuck()
         }
@@ -193,6 +238,7 @@ class WorkoutSounds(context: Context, val engineName: String = "") {
 
     private companion object {
         const val SPEECH_TIMEOUT_MS = 20_000L
+        const val READY_TIMEOUT_MS = 5_000L
     }
 }
 

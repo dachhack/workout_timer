@@ -118,13 +118,14 @@ class TimerService : Service() {
         tickerJob?.cancel()
         releaseWakeLock()
         activeTimerId = null
-        // Swap the ongoing notification for a dismissible "done" one, and give the
-        // final announcement a moment to play before winding down.
+        // Swap the ongoing notification for a dismissible "done" one. The engine
+        // already waited for the closing message, so this is just a breath
+        // before the service goes away.
         stopForeground(STOP_FOREGROUND_REMOVE)
         getSystemService(NotificationManager::class.java)
             .notify(DONE_NOTIFICATION_ID, doneNotification())
         scope.launch {
-            delay(6000)
+            delay(1500)
             stopSelf()
         }
     }
