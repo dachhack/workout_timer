@@ -23,9 +23,10 @@ import java.util.Locale
  * [engineName] is a constructor parameter; create a fresh instance to switch
  * engines. Blank means the device's default engine.
  *
- * Announcements duck whatever else is playing — a music app on the phone or a
- * Bluetooth speaker — for as long as they last, the same way navigation
- * guidance does, then hand the volume back.
+ * Spoken announcements duck whatever else is playing — a music app on the
+ * phone or a Bluetooth speaker — for as long as they last, the same way
+ * navigation guidance does, then hand the volume back. Beeps do not duck;
+ * they simply play over the music.
  */
 class WorkoutSounds(context: Context, val engineName: String = "") {
 
@@ -44,8 +45,8 @@ class WorkoutSounds(context: Context, val engineName: String = "") {
         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
         .build()
 
-    /** Sounds currently playing; the duck lifts when the last one finishes. */
-    private val playing = mutableSetOf<String>()
+    /** Utterances currently speaking; the duck lifts when the last one ends. */
+    private val speaking = mutableSetOf<String>()
     private var focusRequest: AudioFocusRequest? = null
 
     private val tts: TextToSpeech = TextToSpeech(
@@ -67,13 +68,13 @@ class WorkoutSounds(context: Context, val engineName: String = "") {
     ).apply {
         setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) = Unit
-            override fun onDone(utteranceId: String?) = endSound(utteranceId)
-            override fun onStop(utteranceId: String?, interrupted: Boolean) = endSound(utteranceId)
+            override fun onDone(utteranceId: String?) = endSpeech(utteranceId)
+            override fun onStop(utteranceId: String?, interrupted: Boolean) = endSpeech(utteranceId)
 
             @Deprecated("Required by the base class", ReplaceWith(""))
-            override fun onError(utteranceId: String?) = endSound(utteranceId)
+            override fun onError(utteranceId: String?) = endSpeech(utteranceId)
 
-            override fun onError(utteranceId: String?, errorCode: Int) = endSound(utteranceId)
+            override fun onError(utteranceId: String?, errorCode: Int) = endSpeech(utteranceId)
         })
     }
 
@@ -123,14 +124,14 @@ class WorkoutSounds(context: Context, val engineName: String = "") {
             return
         }
         val id = "f3-${System.nanoTime()}"
-        beginSound(id)
+        beginSpeech(id)
         val result = tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, id)
         if (result != TextToSpeech.SUCCESS) {
-            endSound(id)
+            endSpeech(id)
             return
         }
         // If the engine never reports back, don't hold the duck forever.
-        handler.postDelayed({ endSound(id) }, SPEECH_TIMEOUT_MS)
+        handler.postDelayed({ endSpeech(id) }, SPEECH_TIMEOUT_MS)
     }
 
     /** Short tick for the 3-2-1 countdown at the end of a stage. */
@@ -139,26 +140,25 @@ class WorkoutSounds(context: Context, val engineName: String = "") {
     /** Longer tone marking a stage change. */
     fun stageBeep() = playTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 400)
 
+    // Beeps ride on top of whatever is playing. They are far too short to be
+    // worth dipping the music for, and ducking on every 3-2-1 tick would leave
+    // the volume pumping through the last seconds of every stage.
     private fun playTone(tone: Int, durationMs: Int) {
         val generator = tones ?: return
-        val id = "tone-${System.nanoTime()}"
-        beginSound(id)
         runCatching { generator.startTone(tone, durationMs) }
-            .onFailure { endSound(id) }
-            .onSuccess { handler.postDelayed({ endSound(id) }, durationMs + 200L) }
     }
 
     @Synchronized
-    private fun beginSound(id: String) {
-        if (playing.isEmpty()) requestDuck()
-        playing.add(id)
+    private fun beginSpeech(id: String) {
+        if (speaking.isEmpty()) requestDuck()
+        speaking.add(id)
     }
 
     /** Idempotent, so a timeout and a real callback can both fire safely. */
     @Synchronized
-    private fun endSound(id: String?) {
+    private fun endSpeech(id: String?) {
         if (id == null) return
-        if (playing.remove(id) && playing.isEmpty()) abandonDuck()
+        if (speaking.remove(id) && speaking.isEmpty()) abandonDuck()
     }
 
     private fun requestDuck() {
@@ -186,7 +186,7 @@ class WorkoutSounds(context: Context, val engineName: String = "") {
         tts.shutdown()
         tones?.release()
         synchronized(this) {
-            playing.clear()
+            speaking.clear()
             abandonDuck()
         }
     }

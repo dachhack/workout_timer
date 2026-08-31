@@ -38,9 +38,10 @@ with 3-2-1 beeps into each change.
   counters, overall progress bar, pause/resume, and skip-stage. The screen
   stays awake and flips to white during work stages so you can read it from
   the ground.
-- Plays well with music: announcements and beeps duck whatever is playing —
-  a phone music app, a Bluetooth speaker — for as long as they last, then
-  hand the volume back, the same way navigation guidance does.
+- Plays well with music: spoken announcements duck whatever is playing — a
+  phone music app, a Bluetooth speaker — for as long as they last, then hand
+  the volume back, the same way navigation guidance does. Beeps don't duck;
+  they just play over the top.
 - The run lives in a foreground service, so it keeps ticking (and talking)
   with the screen locked or the app backgrounded. The notification shows the
   live countdown with pause/stop actions; backing out of the run screen
@@ -81,7 +82,7 @@ Unit tests cover the block/interval sequencing and duration math:
 - `timer/TimerService.kt` — foreground service that owns the run: live
   notification, wake lock, pause/stop actions.
 - `audio/WorkoutSounds.kt` — text-to-speech (voice and engine selection),
-  tones, and the ducking of other audio while they play.
+  tones, and the ducking of other audio while speech plays.
 - `data/PaxPhotoStore.kt` — the splash photos: gallery imports plus any
   bundled in `assets/pax/`.
 - `ui/` — Compose screens: splash, home (timer list), edit, and run.
