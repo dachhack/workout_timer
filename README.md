@@ -57,6 +57,14 @@ with 3-2-1 beeps into each change.
   each phone can add its own from the gallery with the camera icon on the home
   screen; the two sets are pooled and one is drawn at random each launch.
   Tap to skip; opening the app from the run notification skips it entirely.
+- Share a workout with another PAX: the overflow menu on a timer sends a
+  summary plus a compact `f3timer://` link through the normal share sheet —
+  Slack, a text, email. On the other phone, tapping the link (or pasting it
+  into Import, the arrow on the home screen) shows what it contains and adds
+  it as a timer of its own. Blocks, timings, exercises, and the opening and
+  closing messages all come across; ids are regenerated so nothing is
+  overwritten, and voice settings stay local since the sender's engine may
+  not exist on the recipient's phone.
 - F3 black-and-white branding throughout.
 
 ## Building
@@ -70,7 +78,8 @@ Requires JDK 17+ and the Android SDK (API 35).
 The APK lands in `app/build/outputs/apk/debug/app-debug.apk`. Install it with
 `adb install` or open the project in Android Studio and hit Run.
 
-Unit tests cover the block/interval sequencing and duration math:
+Unit tests cover the block/interval sequencing, duration math, and the
+share-link round trip:
 
 ```sh
 ./gradlew testDebugUnitTest
@@ -88,6 +97,8 @@ Unit tests cover the block/interval sequencing and duration math:
   notification, wake lock, pause/stop actions.
 - `audio/WorkoutSounds.kt` — text-to-speech (voice and engine selection),
   tones, and the ducking of other audio while speech plays.
+- `data/TimerShare.kt` — encoding a timer into a shareable link and reading
+  one back.
 - `data/PaxPhotoStore.kt` — the splash photos: gallery imports plus any
   bundled in `assets/pax/`.
 - `ui/` — Compose screens: splash, home (timer list), edit, and run.

@@ -1,5 +1,7 @@
 package com.f3.workouttimer.ui
 
+import android.content.Context
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -24,18 +26,25 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -44,6 +53,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -52,6 +62,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.f3.workouttimer.data.PaxPhotoStore
 import com.f3.workouttimer.data.TimerRepository
+import com.f3.workouttimer.data.TimerShare
 import com.f3.workouttimer.model.WorkoutTimer
 import com.f3.workouttimer.model.formatDuration
 import com.f3.workouttimer.timer.TimerService
@@ -67,6 +78,8 @@ fun HomeScreen(
     onCreate: () -> Unit,
     onEdit: (String) -> Unit,
     onRun: (String) -> Unit,
+    importText: String? = null,
+    onImportHandled: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val repo = remember { TimerRepository.get(context) }
@@ -74,6 +87,15 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     var pendingDelete by remember { mutableStateOf<WorkoutTimer?>(null) }
     var showPhotoDialog by remember { mutableStateOf(false) }
+    var importPrefill by remember { mutableStateOf<String?>(null) }
+
+    // A shared link opened the app: bring up the import sheet with it filled in.
+    LaunchedEffect(importText) {
+        if (importText != null) {
+            importPrefill = importText
+            onImportHandled()
+        }
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -94,7 +116,12 @@ fun HomeScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item { F3Header(onPhotos = { showPhotoDialog = true }) }
+            item {
+                F3Header(
+                    onPhotos = { showPhotoDialog = true },
+                    onImport = { importPrefill = "" },
+                )
+            }
             TimerService.activeTimerId?.let { activeId ->
                 item {
                     Card(
@@ -144,6 +171,7 @@ fun HomeScreen(
                     onRun = { onRun(timer.id) },
                     onEdit = { onEdit(timer.id) },
                     onDelete = { pendingDelete = timer },
+                    onShare = { shareTimer(context, timer) },
                 )
             }
         }
@@ -151,6 +179,17 @@ fun HomeScreen(
 
     if (showPhotoDialog) {
         SplashPhotoDialog(onDismiss = { showPhotoDialog = false })
+    }
+
+    importPrefill?.let { prefill ->
+        ImportDialog(
+            initialText = prefill,
+            onDismiss = { importPrefill = null },
+            onImport = { timer ->
+                scope.launch { repo.save(timer) }
+                importPrefill = null
+            },
+        )
     }
 
     pendingDelete?.let { timer ->
@@ -172,7 +211,7 @@ fun HomeScreen(
 }
 
 @Composable
-private fun F3Header(onPhotos: () -> Unit) {
+private fun F3Header(onPhotos: () -> Unit, onImport: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -196,8 +235,17 @@ private fun F3Header(onPhotos: () -> Unit) {
                 letterSpacing = 3.sp,
             )
         }
-        IconButton(onClick = onPhotos, modifier = Modifier.align(Alignment.TopEnd)) {
-            Icon(Icons.Default.AddAPhoto, contentDescription = "Splash photos", tint = F3Gray)
+        Row(modifier = Modifier.align(Alignment.TopEnd)) {
+            IconButton(onClick = onImport) {
+                Icon(
+                    Icons.Default.FileDownload,
+                    contentDescription = "Import a shared workout",
+                    tint = F3Gray,
+                )
+            }
+            IconButton(onClick = onPhotos) {
+                Icon(Icons.Default.AddAPhoto, contentDescription = "Splash photos", tint = F3Gray)
+            }
         }
     }
 }
@@ -271,6 +319,7 @@ private fun TimerCard(
     onRun: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onShare: () -> Unit,
 ) {
     Card(
         onClick = onRun,
@@ -306,11 +355,30 @@ private fun TimerCard(
                     fontSize = 14.sp,
                 )
             }
-            IconButton(onClick = onEdit) {
-                Icon(Icons.Default.Edit, contentDescription = "Edit", tint = F3Gray)
-            }
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = F3Gray)
+            // Four controls would crowd the row, so everything but Start lives
+            // behind the overflow.
+            var menuOpen by remember { mutableStateOf(false) }
+            Box {
+                IconButton(onClick = { menuOpen = true }) {
+                    Icon(Icons.Default.MoreVert, contentDescription = "More", tint = F3Gray)
+                }
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text("Edit") },
+                        leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                        onClick = { menuOpen = false; onEdit() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Share") },
+                        leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                        onClick = { menuOpen = false; onShare() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Delete") },
+                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                        onClick = { menuOpen = false; onDelete() },
+                    )
+                }
             }
             Spacer(Modifier.width(4.dp))
             Box(
@@ -327,4 +395,100 @@ private fun TimerCard(
             }
         }
     }
+}
+
+/** Hands the workout to the system share sheet as a summary plus its link. */
+private fun shareTimer(context: Context, timer: WorkoutTimer) {
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, timer.name)
+        putExtra(Intent.EXTRA_TEXT, TimerShare.shareText(timer))
+    }
+    context.startActivity(Intent.createChooser(send, "Share workout"))
+}
+
+/**
+ * Takes a shared link — pasted, or handed over by tapping one — and shows what
+ * it contains before adding it.
+ */
+@Composable
+private fun ImportDialog(
+    initialText: String,
+    onDismiss: () -> Unit,
+    onImport: (WorkoutTimer) -> Unit,
+) {
+    val clipboard = LocalClipboardManager.current
+    var text by remember { mutableStateOf(initialText) }
+    val decoded = remember(text) { TimerShare.decode(text) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Import a workout") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "Paste the link another PAX shared with you.",
+                    color = F3Gray,
+                    fontSize = 13.sp,
+                )
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    label = { Text("Shared link") },
+                    placeholder = { Text("f3timer://import?d=…", color = F3Gray) },
+                    minLines = 2,
+                    maxLines = 4,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                TextButton(
+                    onClick = { clipboard.getText()?.text?.let { text = it } },
+                ) { Text("Paste from clipboard") }
+
+                when {
+                    text.isBlank() -> Unit
+                    decoded == null -> Text(
+                        "That doesn't look like a shared workout.",
+                        color = MaterialTheme.colorScheme.error,
+                        fontSize = 13.sp,
+                    )
+                    else -> Column {
+                        Text(
+                            decoded.name,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.sp,
+                        )
+                        Text(
+                            buildString {
+                                append("${decoded.blocks.size} block")
+                                if (decoded.blocks.size != 1) append("s")
+                                append(" · ${formatDuration(decoded.totalSeconds())}")
+                            },
+                            color = F3Gray,
+                            fontSize = 13.sp,
+                        )
+                        val names = decoded.blocks.mapNotNull { it.name.ifBlank { null } }
+                        if (names.isNotEmpty()) {
+                            Text(
+                                names.joinToString(" → "),
+                                color = F3Gray,
+                                fontSize = 12.sp,
+                            )
+                        }
+                        Text(
+                            "Voice settings stay yours.",
+                            color = F3Gray,
+                            fontSize = 12.sp,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { decoded?.let(onImport) },
+                enabled = decoded != null,
+            ) { Text("Import") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }

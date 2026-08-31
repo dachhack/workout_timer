@@ -1,5 +1,6 @@
 package com.f3.workouttimer
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -19,6 +20,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.f3.workouttimer.data.TimerShare
 import com.f3.workouttimer.ui.EditScreen
 import com.f3.workouttimer.ui.HomeScreen
 import com.f3.workouttimer.ui.RunScreen
@@ -26,22 +28,49 @@ import com.f3.workouttimer.ui.SplashScreen
 import com.f3.workouttimer.ui.theme.F3WorkoutTimerTheme
 
 class MainActivity : ComponentActivity() {
+
+    // Held as state rather than read once, so a notification tap or a shared
+    // link arriving while the app is already open is handled too.
+    private val pendingRunId = mutableStateOf<String?>(null)
+    private val pendingImport = mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        val launchRunId = intent?.getStringExtra(EXTRA_LAUNCH_RUN_ID)
+        handleIntent(intent)
         setContent {
             F3WorkoutTimerTheme {
+                val launchRunId by pendingRunId
+                val importText by pendingImport
                 // Jumping straight into a running workout from the notification
                 // skips the splash.
                 var showSplash by rememberSaveable { mutableStateOf(launchRunId == null) }
                 Box {
-                    AppNav(launchRunId = launchRunId)
+                    AppNav(
+                        launchRunId = launchRunId,
+                        onRunLaunchHandled = { pendingRunId.value = null },
+                        importText = importText,
+                        onImportHandled = { pendingImport.value = null },
+                    )
                     AnimatedVisibility(visible = showSplash, exit = fadeOut(tween(400))) {
                         SplashScreen(onDone = { showSplash = false })
                     }
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        intent?.getStringExtra(EXTRA_LAUNCH_RUN_ID)?.let { pendingRunId.value = it }
+        val data = intent?.data
+        if (data != null && data.scheme == TimerShare.SCHEME) {
+            pendingImport.value = data.toString()
         }
     }
 
@@ -52,10 +81,18 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun AppNav(launchRunId: String?) {
+private fun AppNav(
+    launchRunId: String?,
+    onRunLaunchHandled: () -> Unit,
+    importText: String?,
+    onImportHandled: () -> Unit,
+) {
     val nav = rememberNavController()
     LaunchedEffect(launchRunId) {
-        if (launchRunId != null) nav.navigate("run/$launchRunId")
+        if (launchRunId != null) {
+            nav.navigate("run/$launchRunId")
+            onRunLaunchHandled()
+        }
     }
     NavHost(navController = nav, startDestination = "home") {
         composable("home") {
@@ -63,6 +100,8 @@ private fun AppNav(launchRunId: String?) {
                 onCreate = { nav.navigate("edit") },
                 onEdit = { id -> nav.navigate("edit?id=$id") },
                 onRun = { id -> nav.navigate("run/$id") },
+                importText = importText,
+                onImportHandled = onImportHandled,
             )
         }
         composable(
