@@ -31,6 +31,10 @@ with 3-2-1 beeps into each change.
 - Voice picker per timer: choose any installed text-to-speech engine (Google,
   Samsung, third-party) and any of its voices, with a spoken preview when you
   select one. Blank keeps the device defaults.
+- Optional opening and closing messages per timer: what the app says as the
+  run starts ("Circle up, gentlemen") and once the last interval is done.
+  Leave either blank for the defaults — "Get ready" and "Workout complete.
+  Nice work."
 - Optional next-exercise call-out (on by default): during rest and transition
   the app speaks what's coming — "Rest. Next up: Burpees" — and shows it in
   large type on screen so the PAX can see it from the ground.

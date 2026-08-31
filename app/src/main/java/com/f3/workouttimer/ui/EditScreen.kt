@@ -66,6 +66,8 @@ import com.f3.workouttimer.audio.WorkoutSounds
 import com.f3.workouttimer.audio.voiceLabel
 import com.f3.workouttimer.data.TimerRepository
 import com.f3.workouttimer.model.Block
+import com.f3.workouttimer.model.DEFAULT_CLOSING
+import com.f3.workouttimer.model.DEFAULT_OPENING
 import com.f3.workouttimer.model.Stage
 import com.f3.workouttimer.model.WorkoutTimer
 import com.f3.workouttimer.model.formatDuration
@@ -111,6 +113,8 @@ private fun EditForm(
     var announceNextExercise by remember(initial.id) {
         mutableStateOf(initial.announceNextExercise)
     }
+    var openingMessage by remember(initial.id) { mutableStateOf(initial.openingMessage) }
+    var closingMessage by remember(initial.id) { mutableStateOf(initial.closingMessage) }
     var voiceName by remember(initial.id) { mutableStateOf(initial.voiceName) }
     var voiceEngine by remember(initial.id) { mutableStateOf(initial.voiceEngine) }
 
@@ -125,6 +129,8 @@ private fun EditForm(
         name = name.ifBlank { "Beatdown" },
         blocks = blocks,
         announceNextExercise = announceNextExercise,
+        openingMessage = openingMessage,
+        closingMessage = closingMessage,
         voiceName = voiceName,
         voiceEngine = voiceEngine,
     )
@@ -220,26 +226,54 @@ private fun EditForm(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                Column(
+                    Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("CALL OUT NEXT EXERCISE", fontWeight = FontWeight.Black, letterSpacing = 2.sp)
-                        Text(
-                            "Announces what's coming during rest and transition",
-                            color = F3Gray,
-                            fontSize = 12.sp,
+                    Text("ANNOUNCEMENTS", fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+                    OutlinedTextField(
+                        value = openingMessage,
+                        onValueChange = { openingMessage = it },
+                        label = { Text("Opening message") },
+                        placeholder = { Text(DEFAULT_OPENING, color = F3Gray) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = closingMessage,
+                        onValueChange = { closingMessage = it },
+                        label = { Text("Closing message") },
+                        placeholder = { Text(DEFAULT_CLOSING, color = F3Gray) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text(
+                        "Spoken as the workout starts and when it finishes. The opening " +
+                            "plays over the 5-second lead-in, so keep it short.",
+                        color = F3Gray,
+                        fontSize = 12.sp,
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "CALL OUT NEXT EXERCISE",
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 2.sp,
+                            )
+                            Text(
+                                "Announces what's coming during rest and transition",
+                                color = F3Gray,
+                                fontSize = 12.sp,
+                            )
+                        }
+                        Switch(
+                            checked = announceNextExercise,
+                            onCheckedChange = { announceNextExercise = it },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = F3Black,
+                                checkedTrackColor = F3White,
+                            ),
                         )
                     }
-                    Switch(
-                        checked = announceNextExercise,
-                        onCheckedChange = { announceNextExercise = it },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = F3Black,
-                            checkedTrackColor = F3White,
-                        ),
-                    )
                 }
             }
 

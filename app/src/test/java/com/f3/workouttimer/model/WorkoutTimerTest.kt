@@ -137,6 +137,20 @@ class WorkoutTimerTest {
     }
 
     @Test
+    fun `opening and closing messages fall back to the defaults when blank`() {
+        val default = WorkoutTimer(blocks = emptyList())
+        assertEquals(DEFAULT_OPENING, default.opening)
+        assertEquals(DEFAULT_CLOSING, default.closing)
+
+        val custom = default.copy(
+            openingMessage = "Circle up, gentlemen",
+            closingMessage = "Good work. See you Thursday.",
+        )
+        assertEquals("Circle up, gentlemen", custom.opening)
+        assertEquals("Good work. See you Thursday.", custom.closing)
+    }
+
+    @Test
     fun `an empty workout has no intervals and no length`() {
         val timer = WorkoutTimer(blocks = emptyList())
 

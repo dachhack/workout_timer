@@ -67,7 +67,7 @@ class TimerEngine(
         sounds.setVoiceByName(timer.voiceName)
         job = scope.launch {
             phase = RunPhase.LEAD_IN
-            sounds.speak("Get ready")
+            sounds.speak(timer.opening)
             countdown(LEAD_IN_SECONDS)
             for (i in intervals.indices) {
                 currentIndex = i
@@ -78,7 +78,7 @@ class TimerEngine(
             }
             phase = RunPhase.FINISHED
             sounds.stageBeep()
-            sounds.speak("Workout complete. Nice work.")
+            sounds.speak(timer.closing)
             onFinished()
         }
     }

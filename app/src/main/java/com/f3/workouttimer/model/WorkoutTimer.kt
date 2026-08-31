@@ -85,6 +85,10 @@ data class WorkoutTimer(
     val name: String = "Beatdown",
     /** The whole workout, in order. */
     val blocks: List<Block> = emptyList(),
+    /** Spoken over the lead-in when the run starts; blank uses [DEFAULT_OPENING]. */
+    val openingMessage: String = "",
+    /** Spoken when the workout finishes; blank uses [DEFAULT_CLOSING]. */
+    val closingMessage: String = "",
     /** Speak the coming exercise during rest and transition, so the PAX can set up. */
     val announceNextExercise: Boolean = true,
     /** TTS voice name ([android.speech.tts.Voice.getName]); blank = engine default. */
@@ -100,7 +104,16 @@ data class WorkoutTimer(
     }
 
     fun totalSeconds(): Int = intervals().sumOf { it.seconds }
+
+    /** What the app says as the run starts. */
+    val opening: String get() = openingMessage.ifBlank { DEFAULT_OPENING }
+
+    /** What the app says once the last interval is done. */
+    val closing: String get() = closingMessage.ifBlank { DEFAULT_CLOSING }
 }
+
+const val DEFAULT_OPENING = "Get ready"
+const val DEFAULT_CLOSING = "Workout complete. Nice work."
 
 data class Interval(
     val type: StageType,
