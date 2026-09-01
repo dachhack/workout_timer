@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddAPhoto
+import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileDownload
@@ -78,6 +79,7 @@ fun HomeScreen(
     onCreate: () -> Unit,
     onEdit: (String) -> Unit,
     onRun: (String) -> Unit,
+    onSchedule: () -> Unit = {},
     importText: String? = null,
     onImportHandled: () -> Unit = {},
 ) {
@@ -120,6 +122,7 @@ fun HomeScreen(
                 F3Header(
                     onPhotos = { showPhotoDialog = true },
                     onImport = { importPrefill = "" },
+                    onSchedule = onSchedule,
                 )
             }
             TimerService.activeTimerId?.let { activeId ->
@@ -211,7 +214,11 @@ fun HomeScreen(
 }
 
 @Composable
-private fun F3Header(onPhotos: () -> Unit, onImport: () -> Unit) {
+private fun F3Header(
+    onPhotos: () -> Unit,
+    onImport: () -> Unit,
+    onSchedule: () -> Unit,
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -236,6 +243,9 @@ private fun F3Header(onPhotos: () -> Unit, onImport: () -> Unit) {
             )
         }
         Row(modifier = Modifier.align(Alignment.TopEnd)) {
+            IconButton(onClick = onSchedule) {
+                Icon(Icons.Default.Alarm, contentDescription = "Schedule", tint = F3Gray)
+            }
             IconButton(onClick = onImport) {
                 Icon(
                     Icons.Default.FileDownload,

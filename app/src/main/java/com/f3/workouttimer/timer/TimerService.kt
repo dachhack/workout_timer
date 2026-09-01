@@ -65,11 +65,12 @@ class TimerService : Service() {
         when (intent?.action) {
             ACTION_START -> {
                 val id = intent.getStringExtra(EXTRA_TIMER_ID)
+                val blockId = intent.getStringExtra(EXTRA_BLOCK_ID).orEmpty()
                 val current = engine
                 if (id != null &&
                     (current == null || current.timer.id != id || current.phase == RunPhase.FINISHED)
                 ) {
-                    startRun(id)
+                    startRun(id, blockId)
                 } else {
                     // Re-entering the same run from the UI: just refresh the notification.
                     startForeground(NOTIFICATION_ID, buildNotification())
@@ -84,13 +85,20 @@ class TimerService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun startRun(timerId: String) {
+    private fun startRun(timerId: String, blockId: String = "") {
         startForeground(NOTIFICATION_ID, buildNotification())
         engine?.stop()
         tickerJob?.cancel()
         scope.launch {
-            val timer = TimerRepository.get(this@TimerService).timers.first()
+            val saved = TimerRepository.get(this@TimerService).timers.first()
                 .find { it.id == timerId }
+            // A scheduled cue can point at one block instead of the whole workout.
+            val timer = when {
+                saved == null -> null
+                blockId.isBlank() -> saved
+                else -> saved.copy(blocks = saved.blocks.filter { it.id == blockId })
+                    .takeIf { it.blocks.isNotEmpty() }
+            }
             if (timer == null) {
                 stopRun()
                 return@launch
@@ -245,16 +253,19 @@ class TimerService : Service() {
         private const val ACTION_TOGGLE_PAUSE = "com.f3.workouttimer.action.TOGGLE_PAUSE"
         private const val ACTION_STOP = "com.f3.workouttimer.action.STOP"
         private const val EXTRA_TIMER_ID = "timer_id"
+        private const val EXTRA_BLOCK_ID = "block_id"
 
         /** Timer id of the run in progress, for the home screen's resume banner. */
         var activeTimerId by mutableStateOf<String?>(null)
             private set
 
-        fun start(context: Context, timerId: String) {
+        /** [blockId] runs just that block of the workout; blank runs all of it. */
+        fun start(context: Context, timerId: String, blockId: String = "") {
             context.startForegroundService(
                 Intent(context, TimerService::class.java)
                     .setAction(ACTION_START)
                     .putExtra(EXTRA_TIMER_ID, timerId)
+                    .putExtra(EXTRA_BLOCK_ID, blockId)
             )
         }
 

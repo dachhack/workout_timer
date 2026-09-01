@@ -20,12 +20,16 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.lifecycle.lifecycleScope
+import com.f3.workouttimer.alarm.CueScheduler
 import com.f3.workouttimer.data.TimerShare
 import com.f3.workouttimer.ui.EditScreen
 import com.f3.workouttimer.ui.HomeScreen
 import com.f3.workouttimer.ui.RunScreen
+import com.f3.workouttimer.ui.ScheduleScreen
 import com.f3.workouttimer.ui.SplashScreen
 import com.f3.workouttimer.ui.theme.F3WorkoutTimerTheme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -38,6 +42,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         handleIntent(intent)
+        // Cheap insurance: alarms can be dropped by a force-stop or a restore,
+        // so re-book them whenever the app is opened.
+        lifecycleScope.launch { CueScheduler.rescheduleAll(applicationContext) }
         setContent {
             F3WorkoutTimerTheme {
                 val launchRunId by pendingRunId
@@ -100,9 +107,13 @@ private fun AppNav(
                 onCreate = { nav.navigate("edit") },
                 onEdit = { id -> nav.navigate("edit?id=$id") },
                 onRun = { id -> nav.navigate("run/$id") },
+                onSchedule = { nav.navigate("schedule") },
                 importText = importText,
                 onImportHandled = onImportHandled,
             )
+        }
+        composable("schedule") {
+            ScheduleScreen(onBack = { nav.popBackStack() })
         }
         composable(
             route = "edit?id={id}",

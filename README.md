@@ -65,6 +65,12 @@ with 3-2-1 beeps into each change.
   closing messages all come across; ids are regenerated so nothing is
   overwritten, and voice settings stay local since the sender's engine may
   not exist on the recipient's phone.
+- Scheduled cues (the alarm icon on the home screen): set a wall-clock time
+  and the app acts on it whether or not it is open — sound an alert, speak a
+  line, start a saved workout, or any combination. A cue can target one block
+  of a workout instead of the whole thing, repeat on chosen weekdays (or fire
+  once), and is booked as a real alarm clock so it survives Doze and a
+  reboot.
 - F3 black-and-white branding throughout.
 
 ## Building
@@ -99,6 +105,10 @@ share-link round trip:
   tones, and the ducking of other audio while speech plays.
 - `data/TimerShare.kt` — encoding a timer into a shareable link and reading
   one back.
+- `model/ScheduledCue.kt` + `data/ScheduleRepository.kt` — the clock-time cues
+  and their next-occurrence maths.
+- `alarm/` — booking cues with AlarmManager, the receivers that catch them
+  (including after a reboot), and the service that plays one.
 - `data/PaxPhotoStore.kt` — the splash photos: gallery imports plus any
   bundled in `assets/pax/`.
 - `ui/` — Compose screens: splash, home (timer list), edit, and run.
