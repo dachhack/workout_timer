@@ -83,6 +83,7 @@ class TimerService : Service() {
                 alert = intent.getBooleanExtra(EXTRA_CUE_ALERT, false),
                 message = intent.getStringExtra(EXTRA_CUE_MESSAGE).orEmpty(),
             )
+            ACTION_TICK -> sounds?.countdownBeep()
             ACTION_TOGGLE_PAUSE -> {
                 engine?.togglePause()
                 notifyNow()
@@ -276,6 +277,7 @@ class TimerService : Service() {
         private const val ACTION_TOGGLE_PAUSE = "com.f3.workouttimer.action.TOGGLE_PAUSE"
         private const val ACTION_STOP = "com.f3.workouttimer.action.STOP"
         private const val ACTION_CUE = "com.f3.workouttimer.action.CUE"
+        private const val ACTION_TICK = "com.f3.workouttimer.action.TICK"
         private const val EXTRA_CUE_ALERT = "cue_alert"
         private const val EXTRA_CUE_MESSAGE = "cue_message"
         private const val EXTRA_TIMER_ID = "timer_id"
@@ -305,6 +307,13 @@ class TimerService : Service() {
                     .setAction(ACTION_CUE)
                     .putExtra(EXTRA_CUE_ALERT, alert)
                     .putExtra(EXTRA_CUE_MESSAGE, message)
+            )
+        }
+
+        /** A single short beep, for the starting lights. */
+        fun playTick(context: Context) {
+            context.startService(
+                Intent(context, TimerService::class.java).setAction(ACTION_TICK)
             )
         }
 

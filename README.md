@@ -86,6 +86,16 @@ with 3-2-1 beeps into each change.
   while the app is talking is ignored so its own call-outs can't trigger a
   skip. Ending the workout needs an unambiguous phrase — a bare "stop" is
   deliberately not a command.
+- Custom voice replies (Voice replies, in the home overflow menu): teach the
+  app a call and response — ask "who has the best pushup form?" mid-workout
+  and it answers "It's Sprocket. Hands down." Matching is forgiving, since a
+  recogniser outdoors rarely returns the exact sentence: most of the
+  trigger's distinctive words is enough, and a trigger written "pushup" still
+  matches a phone that hears "push up".
+- Starting lights: say "count me down" (or hit the traffic-light button) and
+  the run screen runs a Mario-Kart style red, yellow, green tree with a beep
+  on each and a spoken "Go" — the one place colour shows up in an otherwise
+  black-and-white app.
 - F3 black-and-white branding throughout.
 
 ## Building
@@ -126,6 +136,8 @@ share-link round trip:
   (including after a reboot), and the service that plays one.
 - `model/VoiceCommand.kt` + `voice/VoiceCommands.kt` — the command grammar and
   the speech recogniser that feeds it.
+- `model/CustomReply.kt` + `data/BanterRepository.kt` — the custom call-and-
+  response lines and the forgiving matcher behind them.
 - `data/PaxPhotoStore.kt` — the splash photos: gallery imports plus any
   bundled in `assets/pax/`.
 - `ui/` — Compose screens: splash, home (timer list), edit, and run.

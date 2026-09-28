@@ -13,8 +13,6 @@ import android.speech.SpeechRecognizer
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.f3.workouttimer.model.VoiceCommand
-import com.f3.workouttimer.model.parseVoiceCommand
 
 /**
  * Listens for the handful of commands worth shouting during a beatdown.
@@ -28,7 +26,12 @@ import com.f3.workouttimer.model.parseVoiceCommand
  */
 class VoiceCommands(
     context: Context,
-    private val onCommand: (VoiceCommand) -> Unit,
+    /**
+     * Handed every candidate transcription, best first. Returns a short label
+     * of whatever it acted on for the on-screen readout, or null if none of
+     * them meant anything.
+     */
+    private val onHeard: (List<String>) -> String?,
     /** True while the app itself is speaking. */
     private val isAppSpeaking: () -> Boolean,
 ) {
@@ -128,11 +131,8 @@ class VoiceCommands(
         if (isAppSpeaking() || SystemClock.elapsedRealtime() - appSpokeAt < SPEECH_COOLDOWN_MS) {
             return
         }
-        val match = candidates.firstNotNullOfOrNull { text ->
-            parseVoiceCommand(text)?.let { text to it }
-        } ?: return
-        lastHeard = match.first
-        onCommand(match.second)
+        val acted = onHeard(candidates) ?: return
+        lastHeard = acted
     }
 
     private val listener = object : RecognitionListener {

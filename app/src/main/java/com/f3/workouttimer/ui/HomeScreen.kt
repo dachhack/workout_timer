@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -80,6 +81,7 @@ fun HomeScreen(
     onEdit: (String) -> Unit,
     onRun: (String) -> Unit,
     onSchedule: () -> Unit = {},
+    onBanter: () -> Unit = {},
     importText: String? = null,
     onImportHandled: () -> Unit = {},
 ) {
@@ -123,6 +125,7 @@ fun HomeScreen(
                     onPhotos = { showPhotoDialog = true },
                     onImport = { importPrefill = "" },
                     onSchedule = onSchedule,
+                    onBanter = onBanter,
                 )
             }
             TimerService.activeTimerId?.let { activeId ->
@@ -218,6 +221,7 @@ private fun F3Header(
     onPhotos: () -> Unit,
     onImport: () -> Unit,
     onSchedule: () -> Unit,
+    onBanter: () -> Unit,
 ) {
     Box(
         modifier = Modifier
@@ -246,15 +250,33 @@ private fun F3Header(
             IconButton(onClick = onSchedule) {
                 Icon(Icons.Default.Alarm, contentDescription = "Schedule", tint = F3Gray)
             }
-            IconButton(onClick = onImport) {
-                Icon(
-                    Icons.Default.FileDownload,
-                    contentDescription = "Import a shared workout",
-                    tint = F3Gray,
-                )
-            }
-            IconButton(onClick = onPhotos) {
-                Icon(Icons.Default.AddAPhoto, contentDescription = "Splash photos", tint = F3Gray)
+            // The rest would crowd the header, so they live behind the overflow.
+            var menuOpen by remember { mutableStateOf(false) }
+            Box {
+                IconButton(onClick = { menuOpen = true }) {
+                    Icon(Icons.Default.MoreVert, contentDescription = "More", tint = F3Gray)
+                }
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text("Import a workout") },
+                        leadingIcon = {
+                            Icon(Icons.Default.FileDownload, contentDescription = null)
+                        },
+                        onClick = { menuOpen = false; onImport() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Voice replies") },
+                        leadingIcon = {
+                            Icon(Icons.Default.RecordVoiceOver, contentDescription = null)
+                        },
+                        onClick = { menuOpen = false; onBanter() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Splash photos") },
+                        leadingIcon = { Icon(Icons.Default.AddAPhoto, contentDescription = null) },
+                        onClick = { menuOpen = false; onPhotos() },
+                    )
+                }
             }
         }
     }

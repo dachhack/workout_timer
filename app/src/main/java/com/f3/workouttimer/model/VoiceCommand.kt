@@ -8,6 +8,7 @@ enum class VoiceCommand {
     RESUME,
     END_WORKOUT,
     TIME_LEFT,
+    COUNTDOWN,
 }
 
 /**
@@ -31,6 +32,9 @@ fun parseVoiceCommand(heard: String): VoiceCommand? {
     }
 
     return when {
+        has("count me down", "count us down", "count it down", "countdown") ->
+            VoiceCommand.COUNTDOWN
+
         // "stop the workout" / "end the beatdown" — never a bare "stop".
         has("end", "stop", "finish", "were done", "we are done") &&
             has("workout", "beatdown", "timer", "everything") -> VoiceCommand.END_WORKOUT

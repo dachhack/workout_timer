@@ -23,6 +23,7 @@ import androidx.navigation.navArgument
 import androidx.lifecycle.lifecycleScope
 import com.f3.workouttimer.alarm.CueScheduler
 import com.f3.workouttimer.data.TimerShare
+import com.f3.workouttimer.ui.BanterScreen
 import com.f3.workouttimer.ui.EditScreen
 import com.f3.workouttimer.ui.HomeScreen
 import com.f3.workouttimer.ui.RunScreen
@@ -108,9 +109,13 @@ private fun AppNav(
                 onEdit = { id -> nav.navigate("edit?id=$id") },
                 onRun = { id -> nav.navigate("run/$id") },
                 onSchedule = { nav.navigate("schedule") },
+                onBanter = { nav.navigate("banter") },
                 importText = importText,
                 onImportHandled = onImportHandled,
             )
+        }
+        composable("banter") {
+            BanterScreen(onBack = { nav.popBackStack() })
         }
         composable("schedule") {
             ScheduleScreen(onBack = { nav.popBackStack() })

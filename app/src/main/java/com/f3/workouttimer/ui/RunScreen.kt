@@ -13,6 +13,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.Traffic
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,6 +44,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -57,8 +61,12 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.f3.workouttimer.data.BanterRepository
 import com.f3.workouttimer.model.StageType
+import com.f3.workouttimer.model.matchCustomReply
 import com.f3.workouttimer.model.VoiceCommand
+import com.f3.workouttimer.model.parseVoiceCommand
 import com.f3.workouttimer.model.formatDuration
 import com.f3.workouttimer.model.spokenDuration
 import com.f3.workouttimer.model.splitMovements
@@ -70,6 +78,7 @@ import com.f3.workouttimer.ui.theme.F3Black
 import com.f3.workouttimer.ui.theme.F3DarkGray
 import com.f3.workouttimer.ui.theme.F3Gray
 import com.f3.workouttimer.ui.theme.F3White
+import kotlinx.coroutines.delay
 import kotlin.math.ceil
 
 @Composable
@@ -150,26 +159,49 @@ private fun RunContent(
     }
 
     // Spoken commands, off until asked for.
+    val banterRepo = remember { BanterRepository.get(context) }
+    val replies by banterRepo.replies.collectAsStateWithLifecycle(initialValue = emptyList())
+    val latestReplies = rememberUpdatedState(replies)
+    var lightsRun by remember { mutableIntStateOf(0) }
+
+    val runCommand: (VoiceCommand) -> Unit = { command ->
+        when (command) {
+            VoiceCommand.NEXT_BLOCK -> engine.skipToNextBlock()
+            VoiceCommand.NEXT_STAGE -> engine.skip()
+            VoiceCommand.PAUSE -> if (!engine.isPaused) engine.togglePause()
+            VoiceCommand.RESUME -> if (engine.isPaused) engine.togglePause()
+            VoiceCommand.END_WORKOUT -> TimerService.stop(context)
+            VoiceCommand.COUNTDOWN -> lightsRun++
+            VoiceCommand.TIME_LEFT -> {
+                val left = (engine.totalSeconds - engine.elapsedSeconds).coerceAtLeast(0)
+                // Spoken through the run, so it queues with everything else.
+                TimerService.playCue(
+                    context,
+                    alert = false,
+                    message = "${spokenDuration(left)} left",
+                )
+            }
+        }
+    }
+
     val voice = remember {
         VoiceCommands(
             context = context,
             isAppSpeaking = isAppSpeaking,
-            onCommand = { command ->
-                when (command) {
-                    VoiceCommand.NEXT_BLOCK -> engine.skipToNextBlock()
-                    VoiceCommand.NEXT_STAGE -> engine.skip()
-                    VoiceCommand.PAUSE -> if (!engine.isPaused) engine.togglePause()
-                    VoiceCommand.RESUME -> if (engine.isPaused) engine.togglePause()
-                    VoiceCommand.END_WORKOUT -> TimerService.stop(context)
-                    VoiceCommand.TIME_LEFT -> {
-                        val left = (engine.totalSeconds - engine.elapsedSeconds).coerceAtLeast(0)
-                        // Spoken through the run, so it queues with everything else.
-                        TimerService.playCue(
-                            context,
-                            alert = false,
-                            message = "${spokenDuration(left)} left",
-                        )
-                    }
+            onHeard = { candidates ->
+                // An explicit custom trigger beats the loose built-in keywords.
+                val banter = candidates.firstNotNullOfOrNull {
+                    matchCustomReply(it, latestReplies.value)
+                }
+                if (banter != null) {
+                    TimerService.playCue(context, alert = false, message = banter.reply)
+                    banter.trigger
+                } else {
+                    candidates.firstNotNullOfOrNull { parseVoiceCommand(it) }
+                        ?.also(runCommand)
+                        ?.name
+                        ?.lowercase()
+                        ?.replace('_', ' ')
                 }
             },
         )
@@ -220,6 +252,24 @@ private fun RunContent(
         listOfNotNull(named, position.ifBlank { null }).joinToString(" · ")
     }.orEmpty()
 
+    // Mario-Kart style starting lights, on request.
+    var lightPhase by remember { mutableStateOf<LightPhase?>(null) }
+    LaunchedEffect(lightsRun) {
+        if (lightsRun == 0) return@LaunchedEffect
+        lightPhase = LightPhase.RED
+        TimerService.playTick(context)
+        delay(850)
+        lightPhase = LightPhase.YELLOW
+        TimerService.playTick(context)
+        delay(850)
+        lightPhase = LightPhase.GREEN
+        TimerService.playTick(context)
+        TimerService.playCue(context, alert = false, message = "Go")
+        delay(1400)
+        lightPhase = null
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -377,16 +427,16 @@ private fun RunContent(
                 }
             } else {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(24.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(80.dp)
+                            .size(72.dp)
                             .background(foreground, CircleShape),
                         contentAlignment = Alignment.Center,
                     ) {
-                        IconButton(onClick = { engine.togglePause() }, modifier = Modifier.size(80.dp)) {
+                        IconButton(onClick = { engine.togglePause() }, modifier = Modifier.size(72.dp)) {
                             Icon(
                                 if (engine.isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
                                 contentDescription = if (engine.isPaused) "Resume" else "Pause",
@@ -429,9 +479,30 @@ private fun RunContent(
                             )
                         }
                     }
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .background(F3DarkGray, CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        IconButton(
+                            onClick = { lightsRun++ },
+                            modifier = Modifier.size(56.dp),
+                        ) {
+                            Icon(
+                                Icons.Default.Traffic,
+                                contentDescription = "Count down",
+                                tint = F3White,
+                                modifier = Modifier.size(28.dp),
+                            )
+                        }
+                    }
                 }
             }
         }
+    }
+
+        lightPhase?.let { phase -> StartingLights(phase) }
     }
 
     if (confirmEnd) {
@@ -493,4 +564,53 @@ private fun MovementStack(
             )
         }
     }
+}
+
+/** How far through the starting sequence the lights are. */
+private enum class LightPhase { RED, YELLOW, GREEN }
+
+private val LightRed = Color(0xFFE53935)
+private val LightYellow = Color(0xFFFDD835)
+private val LightGreen = Color(0xFF43A047)
+private val LightOff = Color(0xFF1E1E1E)
+
+/**
+ * A drag-strip tree over the workout: red, then yellow, then green and GO.
+ * The one place colour earns its keep in an otherwise black-and-white app.
+ */
+@Composable
+private fun StartingLights(phase: LightPhase) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(F3Black.copy(alpha = 0.92f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Lamp(colour = LightRed, lit = true)
+            Spacer(Modifier.height(20.dp))
+            Lamp(colour = LightYellow, lit = phase != LightPhase.RED)
+            Spacer(Modifier.height(20.dp))
+            Lamp(colour = LightGreen, lit = phase == LightPhase.GREEN)
+            Spacer(Modifier.height(28.dp))
+            Text(
+                text = if (phase == LightPhase.GREEN) "GO!" else "READY",
+                color = if (phase == LightPhase.GREEN) LightGreen else F3Gray,
+                fontSize = if (phase == LightPhase.GREEN) 56.sp else 24.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 6.sp,
+            )
+        }
+    }
+}
+
+@Composable
+private fun Lamp(colour: Color, lit: Boolean) {
+    val shown by animateColorAsState(if (lit) colour else LightOff, label = "lamp")
+    Box(
+        modifier = Modifier
+            .size(96.dp)
+            .background(shown, CircleShape)
+            .border(3.dp, if (lit) colour else F3DarkGray, CircleShape)
+    )
 }
