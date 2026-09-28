@@ -2,6 +2,7 @@ package com.f3.workouttimer.ui
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -25,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileDownload
@@ -34,6 +36,8 @@ import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Traffic
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -64,10 +68,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.f3.workouttimer.BuildConfig
 import com.f3.workouttimer.audio.WorkoutSounds
 import com.f3.workouttimer.data.PaxPhotoStore
 import com.f3.workouttimer.data.TimerRepository
 import com.f3.workouttimer.data.TimerShare
+import com.f3.workouttimer.data.UpdateChecker
+import com.f3.workouttimer.model.AppUpdate
+import com.f3.workouttimer.model.updateAvailable
 import com.f3.workouttimer.model.WorkoutTimer
 import com.f3.workouttimer.model.formatDuration
 import com.f3.workouttimer.timer.TimerService
@@ -104,6 +112,15 @@ fun HomeScreen(
     fun sounds(): WorkoutSounds =
         localSounds.value ?: WorkoutSounds(context).also { localSounds.value = it }
 
+    // A newer published build, if there is one and we could reach it.
+    var update by remember { mutableStateOf<AppUpdate?>(null) }
+    var updateDismissed by remember { mutableStateOf(false) }
+    var showUpdateNotes by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        val latest = UpdateChecker.fetch()
+        if (updateAvailable(latest, BuildConfig.VERSION_CODE)) update = latest
+    }
+
     // A shared link opened the app: bring up the import sheet with it filled in.
     LaunchedEffect(importText) {
         if (importText != null) {
@@ -139,6 +156,50 @@ fun HomeScreen(
                     onBanter = onBanter,
                     onCountdown = { lightsRun++ },
                 )
+            }
+            update?.takeIf { !updateDismissed }?.let { latest ->
+                item {
+                    Card(
+                        onClick = { showUpdateNotes = true },
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                Icons.Default.FileDownload,
+                                contentDescription = null,
+                                tint = LightGreen,
+                                modifier = Modifier.size(28.dp),
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "UPDATE AVAILABLE",
+                                    color = F3White,
+                                    fontWeight = FontWeight.Black,
+                                    letterSpacing = 2.sp,
+                                )
+                                Text(
+                                    "Version ${latest.versionName} — tap to see what's new",
+                                    color = F3Gray,
+                                    fontSize = 12.sp,
+                                )
+                            }
+                            IconButton(onClick = { updateDismissed = true }) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Dismiss",
+                                    tint = F3Gray,
+                                )
+                            }
+                        }
+                    }
+                }
             }
             TimerService.activeTimerId?.let { activeId ->
                 item {
@@ -192,6 +253,23 @@ fun HomeScreen(
                     onShare = { shareTimer(context, timer) },
                 )
             }
+        }
+    }
+
+    if (showUpdateNotes) {
+        update?.let { latest ->
+            UpdateDialog(
+                update = latest,
+                onDismiss = { showUpdateNotes = false },
+                onDownload = {
+                    showUpdateNotes = false
+                    runCatching {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse(latest.downloadUrl))
+                        )
+                    }
+                },
+            )
         }
     }
 
@@ -548,5 +626,49 @@ private fun ImportDialog(
             ) { Text("Import") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+/** What changed in the published build, and where to get it. */
+@Composable
+private fun UpdateDialog(
+    update: AppUpdate,
+    onDismiss: () -> Unit,
+    onDownload: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Version ${update.versionName}") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (update.notes.isEmpty()) {
+                    Text("A newer build is available.", color = F3Gray, fontSize = 13.sp)
+                } else {
+                    update.notes.forEach { note ->
+                        Row(verticalAlignment = Alignment.Top) {
+                            Text("•  ", color = F3Gray)
+                            Text(note, color = F3White, fontSize = 14.sp)
+                        }
+                    }
+                }
+                Text(
+                    "Downloading opens your browser. Unzip it if needed, then open " +
+                        "the APK to install over this one — your timers are kept.",
+                    color = F3Gray,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDownload,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = F3White,
+                    contentColor = F3Black,
+                ),
+            ) { Text("Download") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Later") } },
     )
 }

@@ -97,7 +97,32 @@ with 3-2-1 beeps into each change.
   black-and-white app. Trigger it from the green traffic-light button on the
   home screen (no workout needed — handy for sprints or a race) or from the
   matching button on the run screen, or say "count me down" with the mic on.
+- Update check: on opening the home screen the app reads `update.json` from
+  the repository and, if it describes a newer build than the one installed,
+  shows an "Update available" banner. Tapping it lists what changed and
+  offers a Download button that opens the link in a browser. Failures — no
+  signal, no published manifest — are silent; there is simply no banner.
 - F3 black-and-white branding throughout.
+
+## Publishing a build
+
+`update.json` at the repository root describes the newest build, and the app
+reads it from the default branch:
+
+```json
+{
+  "versionCode": 2,
+  "versionName": "1.1",
+  "notes": ["One line per change"],
+  "downloadUrl": "https://github.com/dachhack/workout_timer/releases/latest"
+}
+```
+
+To publish: bump `versionCode` and `versionName` in `app/build.gradle.kts`,
+build the APK, put it (or a zip of it) somewhere downloadable — a GitHub
+release is the easy option — then set the same version and that link in
+`update.json` and push. Phones running an older build show the banner the
+next time the home screen opens.
 
 ## Building
 

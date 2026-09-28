@@ -1,0 +1,13 @@
+{
+  "versionCode": 2,
+  "versionName": "1.1",
+  "notes": [
+    "Workouts are built from blocks — warm-up, cardio, weights, cool-down",
+    "Several movements in one interval: \"5 Squats, 5 Merkins, 5 Sit-ups\"",
+    "Share a workout with another PAX by link",
+    "Scheduled cues call time during a beatdown",
+    "Spoken commands and custom voice replies",
+    "Mario-Kart starting lights"
+  ],
+  "downloadUrl": "https://github.com/dachhack/workout_timer/releases/latest"
+}

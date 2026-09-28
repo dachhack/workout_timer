@@ -13,8 +13,9 @@ android {
         applicationId = "com.f3.workouttimer"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        // Bump both of these and update.json together when publishing a build.
+        versionCode = 2
+        versionName = "1.1"
     }
 
     buildTypes {
@@ -35,6 +36,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
