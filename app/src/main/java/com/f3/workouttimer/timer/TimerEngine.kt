@@ -60,6 +60,7 @@ class TimerEngine(
 
     private val paused = MutableStateFlow(false)
     private var skipRequested = false
+    private var jumpTo: Int? = null
     private var job: Job? = null
 
     fun start() {
@@ -72,12 +73,15 @@ class TimerEngine(
             remainingMs = LEAD_IN_SECONDS * 1000L
             sounds.speakAndWait(timer.opening)
             countdown(LEAD_IN_SECONDS)
-            for (i in intervals.indices) {
+            var i = 0
+            while (i < intervals.size) {
                 currentIndex = i
                 phase = RunPhase.RUNNING
                 sounds.stageBeep()
                 sounds.speak(announcementFor(i))
                 countdown(intervals[i].seconds)
+                // A jump past the last interval simply ends the workout.
+                i = jumpTo?.also { jumpTo = null } ?: (i + 1)
             }
             phase = RunPhase.FINISHED
             sounds.stageBeep()
@@ -135,6 +139,21 @@ class TimerEngine(
             skipRequested = true
             if (isPaused) togglePause()
         }
+    }
+
+    /** The first interval of the block after the one running, if there is one. */
+    private fun nextBlockStart(): Int? {
+        val current = currentInterval ?: return null
+        return intervals.indexOfFirst { it.blockIndex > current.blockIndex }.takeIf { it >= 0 }
+    }
+
+    val hasNextBlock: Boolean get() = nextBlockStart() != null
+
+    /** Abandons the rest of this block and starts the next one. */
+    fun skipToNextBlock() {
+        if (phase != RunPhase.RUNNING) return
+        jumpTo = nextBlockStart() ?: intervals.size
+        skip()
     }
 
     fun stop() {

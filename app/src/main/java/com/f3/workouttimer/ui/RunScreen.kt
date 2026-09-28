@@ -27,6 +27,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
@@ -56,11 +58,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.f3.workouttimer.model.StageType
+import com.f3.workouttimer.model.VoiceCommand
 import com.f3.workouttimer.model.formatDuration
+import com.f3.workouttimer.model.spokenDuration
 import com.f3.workouttimer.model.splitMovements
 import com.f3.workouttimer.timer.RunPhase
 import com.f3.workouttimer.timer.TimerEngine
 import com.f3.workouttimer.timer.TimerService
+import com.f3.workouttimer.voice.VoiceCommands
 import com.f3.workouttimer.ui.theme.F3Black
 import com.f3.workouttimer.ui.theme.F3DarkGray
 import com.f3.workouttimer.ui.theme.F3Gray
@@ -123,17 +128,67 @@ fun RunScreen(timerId: String, onExit: () -> Unit) {
         return
     }
 
-    RunContent(engine = engine, onExit = onExit)
+    RunContent(
+        engine = engine,
+        isAppSpeaking = { service?.isSpeaking == true },
+        onExit = onExit,
+    )
 }
 
 @Composable
-private fun RunContent(engine: TimerEngine, onExit: () -> Unit) {
+private fun RunContent(
+    engine: TimerEngine,
+    isAppSpeaking: () -> Boolean,
+    onExit: () -> Unit,
+) {
     val context = LocalContext.current
     var confirmEnd by remember { mutableStateOf(false) }
 
     val endWorkout = {
         TimerService.stop(context)
         onExit()
+    }
+
+    // Spoken commands, off until asked for.
+    val voice = remember {
+        VoiceCommands(
+            context = context,
+            isAppSpeaking = isAppSpeaking,
+            onCommand = { command ->
+                when (command) {
+                    VoiceCommand.NEXT_BLOCK -> engine.skipToNextBlock()
+                    VoiceCommand.NEXT_STAGE -> engine.skip()
+                    VoiceCommand.PAUSE -> if (!engine.isPaused) engine.togglePause()
+                    VoiceCommand.RESUME -> if (engine.isPaused) engine.togglePause()
+                    VoiceCommand.END_WORKOUT -> TimerService.stop(context)
+                    VoiceCommand.TIME_LEFT -> {
+                        val left = (engine.totalSeconds - engine.elapsedSeconds).coerceAtLeast(0)
+                        // Spoken through the run, so it queues with everything else.
+                        TimerService.playCue(
+                            context,
+                            alert = false,
+                            message = "${spokenDuration(left)} left",
+                        )
+                    }
+                }
+            },
+        )
+    }
+    DisposableEffect(voice) { onDispose { voice.release() } }
+
+    val micPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> if (granted) voice.start() }
+
+    val toggleListening = {
+        if (voice.isListening) {
+            voice.stop()
+        } else {
+            val granted = ContextCompat.checkSelfPermission(
+                context, Manifest.permission.RECORD_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED
+            if (granted) voice.start() else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
     }
     // Back backgrounds the run (it keeps going in the service); X ends it.
     BackHandler { onExit() }
@@ -288,6 +343,21 @@ private fun RunContent(engine: TimerEngine, onExit: () -> Unit) {
                 color = F3Gray,
                 fontSize = 13.sp,
             )
+            val voiceNote = when {
+                voice.problem.isNotBlank() -> voice.problem
+                voice.isListening && voice.lastHeard.isNotBlank() -> "Heard: ${voice.lastHeard}"
+                voice.isListening -> "Listening — \"next block\", \"pause\", \"resume\""
+                else -> ""
+            }
+            if (voiceNote.isNotBlank()) {
+                Text(
+                    text = voiceNote,
+                    color = F3Gray,
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
             Spacer(Modifier.height(16.dp))
             if (engine.phase == RunPhase.FINISHED) {
                 Box(
@@ -336,6 +406,25 @@ private fun RunContent(engine: TimerEngine, onExit: () -> Unit) {
                                 Icons.Default.SkipNext,
                                 contentDescription = "Skip stage",
                                 tint = F3White,
+                                modifier = Modifier.size(28.dp),
+                            )
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .background(
+                                if (voice.isListening) F3White else F3DarkGray,
+                                CircleShape,
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        IconButton(onClick = toggleListening, modifier = Modifier.size(56.dp)) {
+                            Icon(
+                                if (voice.isListening) Icons.Default.Mic else Icons.Default.MicOff,
+                                contentDescription =
+                                    if (voice.isListening) "Stop listening" else "Listen for commands",
+                                tint = if (voice.isListening) F3Black else F3White,
                                 modifier = Modifier.size(28.dp),
                             )
                         }

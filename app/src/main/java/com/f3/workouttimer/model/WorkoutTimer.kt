@@ -155,6 +155,19 @@ data class Interval(
 fun splitMovements(station: String): List<String> =
     station.split(',', '+', '\n').map { it.trim() }.filter { it.isNotEmpty() }
 
+/** "3 minutes 20 seconds" — for speech, where "3:20" reads as a time of day. */
+fun spokenDuration(totalSeconds: Int): String {
+    val seconds = totalSeconds.coerceAtLeast(0)
+    val m = seconds / 60
+    val s = seconds % 60
+    fun plural(value: Int, unit: String) = "$value $unit${if (value == 1) "" else "s"}"
+    return when {
+        m > 0 && s > 0 -> "${plural(m, "minute")} ${plural(s, "second")}"
+        m > 0 -> plural(m, "minute")
+        else -> plural(s, "second")
+    }
+}
+
 fun formatDuration(totalSeconds: Int): String {
     val m = totalSeconds / 60
     val s = totalSeconds % 60

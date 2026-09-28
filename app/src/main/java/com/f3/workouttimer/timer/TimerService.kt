@@ -48,6 +48,9 @@ class TimerService : Service() {
         private set
 
     private var sounds: WorkoutSounds? = null
+
+    /** True while the run is talking; voice commands ignore what it says. */
+    val isSpeaking: Boolean get() = sounds?.isSpeaking == true
     private var wakeLock: PowerManager.WakeLock? = null
     private var tickerJob: Job? = null
 

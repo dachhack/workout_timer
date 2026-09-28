@@ -50,6 +50,10 @@ class WorkoutSounds(context: Context, val engineName: String = "") {
     var isReady by mutableStateOf(false)
         private set
 
+    /** True while a line is actually being said, so listening can ignore it. */
+    var isSpeaking by mutableStateOf(false)
+        private set
+
     private var pendingVoiceName: String? = null
 
     private val appContext = context.applicationContext
@@ -205,11 +209,13 @@ class WorkoutSounds(context: Context, val engineName: String = "") {
         val done = CompletableDeferred<Unit>()
         synchronized(this) { completions[id] = done }
         beginSpeech(id)
+        isSpeaking = true
         try {
             // Nothing else is mid-sentence, so a flush only clears engine leftovers.
             if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, id) != TextToSpeech.SUCCESS) return
             withTimeoutOrNull(SPEECH_TIMEOUT_MS) { done.await() }
         } finally {
+            isSpeaking = false
             // Runs on cancellation too, so the duck is never left held.
             if (!currentCoroutineContext().isActive) runCatching { tts.stop() }
             finishUtterance(id)

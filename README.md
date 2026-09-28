@@ -79,6 +79,13 @@ with 3-2-1 beeps into each change.
   target one block of a workout instead of the whole thing, repeat on chosen
   weekdays (or fire once), and are booked as real alarm clocks so they
   survive Doze and a reboot.
+- Optional spoken commands during a run (the mic button on the run screen,
+  off until you turn it on): "start the next block", "next", "pause",
+  "resume", "how long", and "end the workout". Recognition runs on-device
+  where the phone supports it, so it works without signal, and anything heard
+  while the app is talking is ignored so its own call-outs can't trigger a
+  skip. Ending the workout needs an unambiguous phrase — a bare "stop" is
+  deliberately not a command.
 - F3 black-and-white branding throughout.
 
 ## Building
@@ -117,6 +124,8 @@ share-link round trip:
   and their next-occurrence maths.
 - `alarm/` — booking cues with AlarmManager, the receivers that catch them
   (including after a reboot), and the service that plays one.
+- `model/VoiceCommand.kt` + `voice/VoiceCommands.kt` — the command grammar and
+  the speech recogniser that feeds it.
 - `data/PaxPhotoStore.kt` — the splash photos: gallery imports plus any
   bundled in `assets/pax/`.
 - `ui/` — Compose screens: splash, home (timer list), edit, and run.
