@@ -160,7 +160,7 @@ private fun RunContent(
     val banterRepo = remember { BanterRepository.get(context) }
     val replies by banterRepo.replies.collectAsStateWithLifecycle(initialValue = emptyList())
     val latestReplies = rememberUpdatedState(replies)
-    var lightsRun by remember { mutableIntStateOf(0) }
+    var lightsVisible by remember { mutableStateOf(false) }
 
     val runCommand: (VoiceCommand) -> Unit = { command ->
         when (command) {
@@ -169,7 +169,7 @@ private fun RunContent(
             VoiceCommand.PAUSE -> if (!engine.isPaused) engine.togglePause()
             VoiceCommand.RESUME -> if (engine.isPaused) engine.togglePause()
             VoiceCommand.END_WORKOUT -> TimerService.stop(context)
-            VoiceCommand.COUNTDOWN -> lightsRun++
+            VoiceCommand.COUNTDOWN, VoiceCommand.GO -> lightsVisible = true
             VoiceCommand.TIME_LEFT -> {
                 val left = (engine.totalSeconds - engine.elapsedSeconds).coerceAtLeast(0)
                 // Spoken through the run, so it queues with everything else.
@@ -467,7 +467,7 @@ private fun RunContent(
                         contentAlignment = Alignment.Center,
                     ) {
                         IconButton(
-                            onClick = { lightsRun++ },
+                            onClick = { lightsVisible = true },
                             modifier = Modifier.size(56.dp),
                         ) {
                             Icon(
@@ -483,10 +483,14 @@ private fun RunContent(
         }
     }
 
+        // Mid-workout there is no waiting about: it counts straight down.
         StartingLightsOverlay(
-            trigger = lightsRun,
+            visible = lightsVisible,
+            armed = false,
+            goSignal = 0,
             onLight = { TimerService.playTick(context) },
             onGo = { TimerService.playCue(context, alert = false, message = "Go") },
+            onDismiss = { lightsVisible = false },
         )
     }
 

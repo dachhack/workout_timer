@@ -118,7 +118,8 @@ fun HomeScreen(
 
     // The lights are useful without a workout too — counting down sprints, a
     // race, anything. No run means no shared voice, so keep a local one.
-    var lightsRun by remember { mutableIntStateOf(0) }
+    var lightsVisible by remember { mutableStateOf(false) }
+    var goSignal by remember { mutableIntStateOf(0) }
     val localSounds = remember { mutableStateOf<WorkoutSounds?>(null) }
     DisposableEffect(Unit) { onDispose { localSounds.value?.release() } }
     fun sounds(): WorkoutSounds =
@@ -144,8 +145,14 @@ fun HomeScreen(
                         banter.trigger
                     }
                     candidates.any { parseVoiceCommand(it) == VoiceCommand.COUNTDOWN } -> {
-                        lightsRun++
+                        lightsVisible = true
                         "count me down"
+                    }
+                    candidates.any { parseVoiceCommand(it) == VoiceCommand.GO } -> {
+                        // Works whether the lights are already waiting or not.
+                        lightsVisible = true
+                        goSignal++
+                        "here we go"
                     }
                     else -> null
                 }
@@ -166,6 +173,20 @@ fun HomeScreen(
                 context, Manifest.permission.RECORD_AUDIO
             ) == PackageManager.PERMISSION_GRANTED
             if (granted) voice.start() else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    var micOpenedForLights by remember { mutableStateOf(false) }
+    LaunchedEffect(lightsVisible) {
+        val granted = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+        if (lightsVisible && granted && !voice.isListening) {
+            voice.start()
+            micOpenedForLights = true
+        } else if (!lightsVisible && micOpenedForLights) {
+            voice.stop()
+            micOpenedForLights = false
         }
     }
 
@@ -223,7 +244,7 @@ fun HomeScreen(
                         voice.isListening -> "Listening — say \"count me down\""
                         else -> ""
                     },
-                    onCountdown = { lightsRun++ },
+                    onCountdown = { lightsVisible = true },
                     onToggleListening = toggleListening,
                 )
             }
@@ -344,9 +365,13 @@ fun HomeScreen(
     }
 
     StartingLightsOverlay(
-        trigger = lightsRun,
+        visible = lightsVisible,
+        armed = true,
+        goSignal = goSignal,
+        listening = voice.isListening,
         onLight = { sounds().countdownBeep() },
         onGo = { sounds().speak("Go") },
+        onDismiss = { lightsVisible = false },
     )
 
     if (showPhotoDialog) {

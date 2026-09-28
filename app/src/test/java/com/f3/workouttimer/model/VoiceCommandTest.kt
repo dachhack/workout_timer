@@ -52,6 +52,24 @@ class VoiceCommandTest {
     }
 
     @Test
+    fun `the starter's call fires waiting lights`() {
+        assertEquals(VoiceCommand.GO, parseVoiceCommand("here we go"))
+        assertEquals(VoiceCommand.GO, parseVoiceCommand("Here we go!"))
+        assertEquals(VoiceCommand.GO, parseVoiceCommand("alright here we go now"))
+    }
+
+    @Test
+    fun `starting is not confused with resuming or counting down`() {
+        // These all live near each other; none should collapse into another.
+        assertEquals(VoiceCommand.RESUME, parseVoiceCommand("keep going"))
+        assertEquals(VoiceCommand.RESUME, parseVoiceCommand("continue"))
+        assertEquals(VoiceCommand.COUNTDOWN, parseVoiceCommand("count me down"))
+        assertEquals(VoiceCommand.GO, parseVoiceCommand("here we go"))
+        // A bare "go" is far too common a shout to arm anything on.
+        assertNull(parseVoiceCommand("go"))
+    }
+
+    @Test
     fun `mumblechatter is not a command`() {
         assertNull(parseVoiceCommand(""))
         assertNull(parseVoiceCommand("   "))

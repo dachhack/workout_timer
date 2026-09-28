@@ -9,6 +9,7 @@ enum class VoiceCommand {
     END_WORKOUT,
     TIME_LEFT,
     COUNTDOWN,
+    GO,
 }
 
 /**
@@ -32,6 +33,9 @@ fun parseVoiceCommand(heard: String): VoiceCommand? {
     }
 
     return when {
+        // The starter's call, for lights already waiting on red.
+        has("here we go", "here we go now") -> VoiceCommand.GO
+
         has("count me down", "count us down", "count it down", "countdown") ->
             VoiceCommand.COUNTDOWN
 
