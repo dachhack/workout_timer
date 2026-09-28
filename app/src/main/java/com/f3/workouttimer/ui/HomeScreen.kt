@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Traffic
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -46,6 +47,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -62,6 +64,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.f3.workouttimer.audio.WorkoutSounds
 import com.f3.workouttimer.data.PaxPhotoStore
 import com.f3.workouttimer.data.TimerRepository
 import com.f3.workouttimer.data.TimerShare
@@ -92,6 +95,14 @@ fun HomeScreen(
     var pendingDelete by remember { mutableStateOf<WorkoutTimer?>(null) }
     var showPhotoDialog by remember { mutableStateOf(false) }
     var importPrefill by remember { mutableStateOf<String?>(null) }
+
+    // The lights are useful without a workout too — counting down sprints, a
+    // race, anything. No run means no shared voice, so keep a local one.
+    var lightsRun by remember { mutableIntStateOf(0) }
+    val localSounds = remember { mutableStateOf<WorkoutSounds?>(null) }
+    DisposableEffect(Unit) { onDispose { localSounds.value?.release() } }
+    fun sounds(): WorkoutSounds =
+        localSounds.value ?: WorkoutSounds(context).also { localSounds.value = it }
 
     // A shared link opened the app: bring up the import sheet with it filled in.
     LaunchedEffect(importText) {
@@ -126,6 +137,7 @@ fun HomeScreen(
                     onImport = { importPrefill = "" },
                     onSchedule = onSchedule,
                     onBanter = onBanter,
+                    onCountdown = { lightsRun++ },
                 )
             }
             TimerService.activeTimerId?.let { activeId ->
@@ -183,6 +195,12 @@ fun HomeScreen(
         }
     }
 
+    StartingLightsOverlay(
+        trigger = lightsRun,
+        onLight = { sounds().countdownBeep() },
+        onGo = { sounds().speak("Go") },
+    )
+
     if (showPhotoDialog) {
         SplashPhotoDialog(onDismiss = { showPhotoDialog = false })
     }
@@ -222,6 +240,7 @@ private fun F3Header(
     onImport: () -> Unit,
     onSchedule: () -> Unit,
     onBanter: () -> Unit,
+    onCountdown: () -> Unit,
 ) {
     Box(
         modifier = Modifier
@@ -247,6 +266,13 @@ private fun F3Header(
             )
         }
         Row(modifier = Modifier.align(Alignment.TopEnd)) {
+            IconButton(onClick = onCountdown) {
+                Icon(
+                    Icons.Default.Traffic,
+                    contentDescription = "Starting lights",
+                    tint = LightGreen,
+                )
+            }
             IconButton(onClick = onSchedule) {
                 Icon(Icons.Default.Alarm, contentDescription = "Schedule", tint = F3Gray)
             }

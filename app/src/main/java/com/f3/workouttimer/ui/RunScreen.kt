@@ -13,7 +13,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -78,7 +77,6 @@ import com.f3.workouttimer.ui.theme.F3Black
 import com.f3.workouttimer.ui.theme.F3DarkGray
 import com.f3.workouttimer.ui.theme.F3Gray
 import com.f3.workouttimer.ui.theme.F3White
-import kotlinx.coroutines.delay
 import kotlin.math.ceil
 
 @Composable
@@ -251,23 +249,6 @@ private fun RunContent(
         }?.uppercase()
         listOfNotNull(named, position.ifBlank { null }).joinToString(" · ")
     }.orEmpty()
-
-    // Mario-Kart style starting lights, on request.
-    var lightPhase by remember { mutableStateOf<LightPhase?>(null) }
-    LaunchedEffect(lightsRun) {
-        if (lightsRun == 0) return@LaunchedEffect
-        lightPhase = LightPhase.RED
-        TimerService.playTick(context)
-        delay(850)
-        lightPhase = LightPhase.YELLOW
-        TimerService.playTick(context)
-        delay(850)
-        lightPhase = LightPhase.GREEN
-        TimerService.playTick(context)
-        TimerService.playCue(context, alert = false, message = "Go")
-        delay(1400)
-        lightPhase = null
-    }
 
     Box(modifier = Modifier.fillMaxSize()) {
     Column(
@@ -492,7 +473,7 @@ private fun RunContent(
                             Icon(
                                 Icons.Default.Traffic,
                                 contentDescription = "Count down",
-                                tint = F3White,
+                                tint = LightGreen,
                                 modifier = Modifier.size(28.dp),
                             )
                         }
@@ -502,7 +483,11 @@ private fun RunContent(
         }
     }
 
-        lightPhase?.let { phase -> StartingLights(phase) }
+        StartingLightsOverlay(
+            trigger = lightsRun,
+            onLight = { TimerService.playTick(context) },
+            onGo = { TimerService.playCue(context, alert = false, message = "Go") },
+        )
     }
 
     if (confirmEnd) {
@@ -564,53 +549,4 @@ private fun MovementStack(
             )
         }
     }
-}
-
-/** How far through the starting sequence the lights are. */
-private enum class LightPhase { RED, YELLOW, GREEN }
-
-private val LightRed = Color(0xFFE53935)
-private val LightYellow = Color(0xFFFDD835)
-private val LightGreen = Color(0xFF43A047)
-private val LightOff = Color(0xFF1E1E1E)
-
-/**
- * A drag-strip tree over the workout: red, then yellow, then green and GO.
- * The one place colour earns its keep in an otherwise black-and-white app.
- */
-@Composable
-private fun StartingLights(phase: LightPhase) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(F3Black.copy(alpha = 0.92f)),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Lamp(colour = LightRed, lit = true)
-            Spacer(Modifier.height(20.dp))
-            Lamp(colour = LightYellow, lit = phase != LightPhase.RED)
-            Spacer(Modifier.height(20.dp))
-            Lamp(colour = LightGreen, lit = phase == LightPhase.GREEN)
-            Spacer(Modifier.height(28.dp))
-            Text(
-                text = if (phase == LightPhase.GREEN) "GO!" else "READY",
-                color = if (phase == LightPhase.GREEN) LightGreen else F3Gray,
-                fontSize = if (phase == LightPhase.GREEN) 56.sp else 24.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 6.sp,
-            )
-        }
-    }
-}
-
-@Composable
-private fun Lamp(colour: Color, lit: Boolean) {
-    val shown by animateColorAsState(if (lit) colour else LightOff, label = "lamp")
-    Box(
-        modifier = Modifier
-            .size(96.dp)
-            .background(shown, CircleShape)
-            .border(3.dp, if (lit) colour else F3DarkGray, CircleShape)
-    )
 }

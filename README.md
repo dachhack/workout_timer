@@ -92,10 +92,11 @@ with 3-2-1 beeps into each change.
   recogniser outdoors rarely returns the exact sentence: most of the
   trigger's distinctive words is enough, and a trigger written "pushup" still
   matches a phone that hears "push up".
-- Starting lights: say "count me down" (or hit the traffic-light button) and
-  the run screen runs a Mario-Kart style red, yellow, green tree with a beep
-  on each and a spoken "Go" — the one place colour shows up in an otherwise
-  black-and-white app.
+- Starting lights: a Mario-Kart style red, yellow, green tree with a beep on
+  each and a spoken "Go" — the one place colour shows up in an otherwise
+  black-and-white app. Trigger it from the green traffic-light button on the
+  home screen (no workout needed — handy for sprints or a race) or from the
+  matching button on the run screen, or say "count me down" with the mic on.
 - F3 black-and-white branding throughout.
 
 ## Building

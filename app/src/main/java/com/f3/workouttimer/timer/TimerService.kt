@@ -302,6 +302,7 @@ class TimerService : Service() {
 
         /** Plays a scheduled cue through the run that is already in progress. */
         fun playCue(context: Context, alert: Boolean, message: String) {
+            if (!isRunning) return
             context.startService(
                 Intent(context, TimerService::class.java)
                     .setAction(ACTION_CUE)
@@ -310,8 +311,13 @@ class TimerService : Service() {
             )
         }
 
-        /** A single short beep, for the starting lights. */
+        /**
+         * A single short beep, for the starting lights. No-op when nothing is
+         * running, so it never wakes an empty service that has no voice to
+         * beep with.
+         */
         fun playTick(context: Context) {
+            if (!isRunning) return
             context.startService(
                 Intent(context, TimerService::class.java).setAction(ACTION_TICK)
             )
