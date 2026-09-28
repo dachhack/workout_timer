@@ -111,7 +111,9 @@ with 3-2-1 beeps into each change.
 **[Download the latest APK](https://github.com/dachhack/workout_timer/releases/latest/download/f3-workout-timer.apk)**
 
 That link is permanent — it always serves the newest published build, so it
-is the one to share with the PAX. Or send them the
+is the one to share with the PAX. The same build is published as a zip at
+`.../releases/latest/download/f3-workout-timer.zip`, for messaging apps that
+refuse to carry an APK. Or send them the
 [releases page](https://github.com/dachhack/workout_timer/releases/latest),
 which shows what changed next to the download.
 
