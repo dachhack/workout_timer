@@ -47,6 +47,11 @@ with 3-2-1 beeps into each change.
   phone music app, a Bluetooth speaker — for as long as they last, then hand
   the volume back, the same way navigation guidance does. Beeps don't duck;
   they just play over the top.
+- Announcements never talk over each other. Everything that speaks — stage
+  call-outs, the opening and closing messages, scheduled cues — goes through
+  one queue and waits its turn. A fire-and-forget line stuck behind others
+  for more than ten seconds is dropped rather than said late, since by then
+  it describes a stage that has passed.
 - The run lives in a foreground service, so it keeps ticking (and talking)
   with the screen locked or the app backgrounded. The notification shows the
   live countdown with pause/stop actions; backing out of the run screen

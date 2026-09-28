@@ -5,8 +5,7 @@ import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.ToneGenerator
-import android.os.Handler
-import android.os.Looper
+import android.os.SystemClock
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
@@ -14,6 +13,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Locale
 
@@ -29,18 +37,23 @@ import java.util.Locale
  * phone or a Bluetooth speaker — for as long as they last, the same way
  * navigation guidance does, then hand the volume back. Beeps do not duck;
  * they simply play over the music.
+ *
+ * Speech is serialised through one queue. Several things can want to talk at
+ * the same moment — a stage announcement, a scheduled cue, the closing
+ * message — and each waits its turn instead of cutting the last one off. A
+ * fire-and-forget line that has waited longer than [STALE_MS] is dropped
+ * rather than played late, since by then it is describing a stage that has
+ * already been and gone; anything a caller is waiting on always plays.
  */
 class WorkoutSounds(context: Context, val engineName: String = "") {
 
     var isReady by mutableStateOf(false)
         private set
 
-    private var pendingUtterance: String? = null
     private var pendingVoiceName: String? = null
 
     private val appContext = context.applicationContext
     private val audioManager = appContext.getSystemService(AudioManager::class.java)
-    private val handler = Handler(Looper.getMainLooper())
 
     private val audioAttributes = AudioAttributes.Builder()
         .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
@@ -54,8 +67,18 @@ class WorkoutSounds(context: Context, val engineName: String = "") {
     /** Completes once the engine has initialised, with whether it succeeded. */
     private val ready = CompletableDeferred<Boolean>()
 
-    /** Waiters for [speakAndWait], keyed by utterance id. */
+    /** Waiters for the engine's own callbacks, keyed by utterance id. */
     private val completions = mutableMapOf<String, CompletableDeferred<Unit>>()
+
+    private class Utterance(
+        val text: String,
+        val queuedAt: Long,
+        /** Non-null when a caller is waiting for this line to finish. */
+        val spoken: CompletableDeferred<Unit>?,
+    )
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val queue = Channel<Utterance>(capacity = 16, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
     private val tts: TextToSpeech = TextToSpeech(
         appContext,
@@ -69,8 +92,6 @@ class WorkoutSounds(context: Context, val engineName: String = "") {
                 }
                 pendingVoiceName?.let { applyVoice(it) }
                 pendingVoiceName = null
-                pendingUtterance?.let { speak(it) }
-                pendingUtterance = null
             }
         },
         engineName.ifBlank { null },
@@ -92,6 +113,17 @@ class WorkoutSounds(context: Context, val engineName: String = "") {
 
     private val tones: ToneGenerator? =
         runCatching { ToneGenerator(AudioManager.STREAM_MUSIC, 85) }.getOrNull()
+
+    init {
+        scope.launch {
+            for (utterance in queue) {
+                val waited = SystemClock.elapsedRealtime() - utterance.queuedAt
+                if (utterance.spoken == null && waited > STALE_MS) continue
+                runCatching { utter(utterance.text) }
+                utterance.spoken?.complete(Unit)
+            }
+        }
+    }
 
     /** All installed TTS engines on the device. */
     fun availableEngines(): List<TextToSpeech.EngineInfo> =
@@ -129,43 +161,59 @@ class WorkoutSounds(context: Context, val engineName: String = "") {
         }
     }
 
+    /** Queues a line behind anything already talking. */
     fun speak(text: String) {
         if (text.isBlank()) return
-        if (!isReady) {
-            pendingUtterance = text
-            return
-        }
-        startUtterance(text)
+        queue.trySend(Utterance(text, SystemClock.elapsedRealtime(), null))
     }
 
     /**
-     * Speaks and suspends until the words have actually finished, so a caller
-     * can hold a countdown back until the message is out. Gives up rather than
+     * Queues a line and suspends until it has actually been said, so a caller
+     * can hold a countdown back until the words are out. Gives up rather than
      * hanging if the engine never initialises or never reports back.
      */
     suspend fun speakAndWait(text: String) {
         if (text.isBlank()) return
-        val engineReady = withTimeoutOrNull(READY_TIMEOUT_MS) { ready.await() } ?: false
-        if (!engineReady) return
-        val done = CompletableDeferred<Unit>()
-        val id = startUtterance(text, done) ?: return
-        withTimeoutOrNull(SPEECH_TIMEOUT_MS + 500) { done.await() }
-        finishUtterance(id)
+        val spoken = CompletableDeferred<Unit>()
+        queue.trySend(Utterance(text, SystemClock.elapsedRealtime(), spoken))
+        withTimeoutOrNull(SPEECH_TIMEOUT_MS + READY_TIMEOUT_MS) { spoken.await() }
     }
 
-    /** Returns the utterance id, or null if the engine refused to speak. */
-    private fun startUtterance(text: String, waiter: CompletableDeferred<Unit>? = null): String? {
-        val id = "f3-${System.nanoTime()}"
-        if (waiter != null) synchronized(this) { completions[id] = waiter }
-        beginSpeech(id)
-        if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, id) != TextToSpeech.SUCCESS) {
-            finishUtterance(id)
-            return null
+    /**
+     * Says a line at once, dropping whatever is queued. For sampling voices in
+     * the editor, where tapping through a list should not queue up a recital.
+     */
+    fun speakPreview(text: String) {
+        drainQueue()
+        runCatching { tts.stop() }
+        speak(text)
+    }
+
+    private fun drainQueue() {
+        while (true) {
+            val result = queue.tryReceive()
+            val utterance = result.getOrNull() ?: return
+            utterance.spoken?.complete(Unit)
         }
-        // If the engine never reports back, don't hold the duck — or a waiter —
-        // forever.
-        handler.postDelayed({ finishUtterance(id) }, SPEECH_TIMEOUT_MS)
-        return id
+    }
+
+    /** Speaks one line and returns once the engine says it is finished. */
+    private suspend fun utter(text: String) {
+        val engineReady = withTimeoutOrNull(READY_TIMEOUT_MS) { ready.await() } ?: false
+        if (!engineReady) return
+        val id = "f3-${System.nanoTime()}"
+        val done = CompletableDeferred<Unit>()
+        synchronized(this) { completions[id] = done }
+        beginSpeech(id)
+        try {
+            // Nothing else is mid-sentence, so a flush only clears engine leftovers.
+            if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, id) != TextToSpeech.SUCCESS) return
+            withTimeoutOrNull(SPEECH_TIMEOUT_MS) { done.await() }
+        } finally {
+            // Runs on cancellation too, so the duck is never left held.
+            if (!currentCoroutineContext().isActive) runCatching { tts.stop() }
+            finishUtterance(id)
+        }
     }
 
     /** Idempotent: lifts the duck for this utterance and releases any waiter. */
@@ -223,7 +271,9 @@ class WorkoutSounds(context: Context, val engineName: String = "") {
     }
 
     fun release() {
-        handler.removeCallbacksAndMessages(null)
+        queue.close()
+        drainQueue()
+        scope.cancel()
         tts.stop()
         tts.shutdown()
         tones?.release()
@@ -239,6 +289,9 @@ class WorkoutSounds(context: Context, val engineName: String = "") {
     private companion object {
         const val SPEECH_TIMEOUT_MS = 20_000L
         const val READY_TIMEOUT_MS = 5_000L
+
+        /** How late a fire-and-forget line may be before it is not worth saying. */
+        const val STALE_MS = 10_000L
     }
 }
 

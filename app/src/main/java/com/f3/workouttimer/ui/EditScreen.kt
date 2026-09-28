@@ -642,7 +642,7 @@ private fun VoicePicker(
                                 onClick = {
                                     onSelectVoice("")
                                     sounds.setVoiceByName("")
-                                    sounds.speak("Ready to work")
+                                    sounds.speakPreview("Ready to work")
                                 },
                             )
                         }
@@ -653,7 +653,7 @@ private fun VoicePicker(
                                 onClick = {
                                     onSelectVoice(voice.name)
                                     sounds.setVoiceByName(voice.name)
-                                    sounds.speak("Ready to work")
+                                    sounds.speakPreview("Ready to work")
                                 },
                             )
                         }
