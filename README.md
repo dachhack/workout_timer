@@ -92,11 +92,13 @@ with 3-2-1 beeps into each change.
   recogniser outdoors rarely returns the exact sentence: most of the
   trigger's distinctive words is enough, and a trigger written "pushup" still
   matches a phone that hears "push up".
-- Starting lights: a Mario-Kart style red, yellow, green tree with a beep on
-  each and a spoken "Go" — the one place colour shows up in an otherwise
-  black-and-white app. Trigger it from the green traffic-light button on the
-  home screen (no workout needed — handy for sprints or a race) or from the
-  matching button on the run screen, or say "count me down" with the mic on.
+- Starting lights: the whole screen goes red (READY), then yellow (SET),
+  then green (GO!), 1.7 seconds apart, with a beep on each and a spoken "Go"
+  — readable from the ground across a parking lot, and the one place colour
+  shows up in an otherwise black-and-white app. Trigger it from the green
+  traffic-light button on the home screen (no workout needed — handy for
+  sprints or a race) or the matching button on the run screen, or say "count
+  me down" with the mic on.
 - Update check: on opening the home screen the app reads `update.json` from
   the repository and, if it describes a newer build than the one installed,
   shows an "Update available" banner. Tapping it lists what changed and
