@@ -76,6 +76,10 @@ class TimerService : Service() {
                     startForeground(NOTIFICATION_ID, buildNotification())
                 }
             }
+            ACTION_CUE -> playCue(
+                alert = intent.getBooleanExtra(EXTRA_CUE_ALERT, false),
+                message = intent.getStringExtra(EXTRA_CUE_MESSAGE).orEmpty(),
+            )
             ACTION_TOGGLE_PAUSE -> {
                 engine?.togglePause()
                 notifyNow()
@@ -119,6 +123,22 @@ class TimerService : Service() {
                     delay(1000)
                 }
             }
+        }
+    }
+
+    /**
+     * A scheduled cue landing mid-workout. It goes through the run's own voice
+     * rather than a second engine, so the warning and the stage announcements
+     * share one duck and never talk over each other.
+     */
+    private fun playCue(alert: Boolean, message: String) {
+        val snd = sounds ?: return
+        scope.launch {
+            if (alert) {
+                snd.stageBeep()
+                delay(700)
+            }
+            if (message.isNotBlank()) snd.speakAndWait(message)
         }
     }
 
@@ -252,6 +272,9 @@ class TimerService : Service() {
         private const val ACTION_START = "com.f3.workouttimer.action.START"
         private const val ACTION_TOGGLE_PAUSE = "com.f3.workouttimer.action.TOGGLE_PAUSE"
         private const val ACTION_STOP = "com.f3.workouttimer.action.STOP"
+        private const val ACTION_CUE = "com.f3.workouttimer.action.CUE"
+        private const val EXTRA_CUE_ALERT = "cue_alert"
+        private const val EXTRA_CUE_MESSAGE = "cue_message"
         private const val EXTRA_TIMER_ID = "timer_id"
         private const val EXTRA_BLOCK_ID = "block_id"
 
@@ -266,6 +289,19 @@ class TimerService : Service() {
                     .setAction(ACTION_START)
                     .putExtra(EXTRA_TIMER_ID, timerId)
                     .putExtra(EXTRA_BLOCK_ID, blockId)
+            )
+        }
+
+        /** True while a workout is actually running. */
+        val isRunning: Boolean get() = activeTimerId != null
+
+        /** Plays a scheduled cue through the run that is already in progress. */
+        fun playCue(context: Context, alert: Boolean, message: String) {
+            context.startService(
+                Intent(context, TimerService::class.java)
+                    .setAction(ACTION_CUE)
+                    .putExtra(EXTRA_CUE_ALERT, alert)
+                    .putExtra(EXTRA_CUE_MESSAGE, message)
             )
         }
 

@@ -65,12 +65,15 @@ with 3-2-1 beeps into each change.
   closing messages all come across; ids are regenerated so nothing is
   overwritten, and voice settings stay local since the sender's engine may
   not exist on the recipient's phone.
-- Scheduled cues (the alarm icon on the home screen): set a wall-clock time
-  and the app acts on it whether or not it is open — sound an alert, speak a
-  line, start a saved workout, or any combination. A cue can target one block
-  of a workout instead of the whole thing, repeat on chosen weekdays (or fire
-  once), and is booked as a real alarm clock so it survives Doze and a
-  reboot.
+- Scheduled cues (the alarm icon on the home screen): a wall-clock time and
+  what to do at it — sound an alert, speak a line, start a saved workout, or
+  any combination. Mostly this is for calling time during a beatdown: 5:10
+  "five minutes left", 5:15 "time's up". A cue that lands while a workout is
+  running speaks through that run's own voice, so the warning and the stage
+  announcements share one duck instead of two engines competing. Cues can
+  target one block of a workout instead of the whole thing, repeat on chosen
+  weekdays (or fire once), and are booked as real alarm clocks so they
+  survive Doze and a reboot.
 - F3 black-and-white branding throughout.
 
 ## Building

@@ -73,21 +73,28 @@ class CueService : Service() {
         getSystemService(NotificationManager::class.java)
             .notify(NOTIFICATION_ID, notification(title, body))
 
-        val snd = WorkoutSounds(this, timer?.voiceEngine.orEmpty()).also { sounds = it }
-        if (timer != null) snd.setVoiceByName(timer.voiceName)
-
-        if (cue.alert) {
-            snd.stageBeep()
-            delay(600)
-        }
-        if (cue.message.isNotBlank()) {
-            snd.speakAndWait(cue.message)
+        if (TimerService.isRunning) {
+            // Mid-workout warning: let the run say it, so there is one voice and
+            // one duck rather than two engines competing.
+            TimerService.playCue(this, cue.alert, cue.message)
+        } else {
+            val snd = WorkoutSounds(this, timer?.voiceEngine.orEmpty()).also { sounds = it }
+            if (timer != null) snd.setVoiceByName(timer.voiceName)
+            if (cue.alert) {
+                snd.stageBeep()
+                delay(700)
+            }
+            if (cue.message.isNotBlank()) {
+                snd.speakAndWait(cue.message)
+            }
         }
 
         if (timer != null) {
             // Hand off to the run itself, which owns its own foreground service.
             TimerService.start(this, timer.id, cue.blockId)
         }
+        // Detach first so the alert stays in the shade after this service goes.
+        stopForeground(STOP_FOREGROUND_DETACH)
         stopSelf()
     }
 

@@ -153,8 +153,10 @@ fun ScheduleScreen(onBack: () -> Unit) {
         ) {
             item {
                 Text(
-                    "Cues fire at a set time whether or not the app is open — sound " +
-                        "an alert, say something, start a workout, or all three.",
+                    "Cues fire at a set clock time, including in the middle of a " +
+                        "workout — a warning that time is nearly up, then a call that " +
+                        "it's over. They work whether or not the app is open, and can " +
+                        "also start a workout.",
                     color = F3Gray,
                     fontSize = 13.sp,
                 )
@@ -380,7 +382,7 @@ private fun CueEditor(
                     value = draft.label,
                     onValueChange = { draft = draft.copy(label = it) },
                     label = { Text("Label (optional)") },
-                    placeholder = { Text("AO start", color = F3Gray) },
+                    placeholder = { Text("Five minute warning", color = F3Gray) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -402,16 +404,22 @@ private fun CueEditor(
                     value = draft.message,
                     onValueChange = { draft = draft.copy(message = it) },
                     label = { Text("Say this (optional)") },
-                    placeholder = { Text("Circle up, gentlemen", color = F3Gray) },
+                    placeholder = { Text("Five minutes left", color = F3Gray) },
                     modifier = Modifier.fillMaxWidth(),
                 )
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
 
                 Text(
-                    "START A WORKOUT",
+                    "ALSO START A WORKOUT",
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 2.sp,
+                    fontSize = 12.sp,
+                )
+                Text(
+                    "Leave this on None for a plain warning during whatever is " +
+                        "already running.",
+                    color = F3Gray,
                     fontSize = 12.sp,
                 )
                 PickerRow(
