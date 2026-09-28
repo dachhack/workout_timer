@@ -79,8 +79,8 @@ with 3-2-1 beeps into each change.
   target one block of a workout instead of the whole thing, repeat on chosen
   weekdays (or fire once), and are booked as real alarm clocks so they
   survive Doze and a reboot.
-- Optional spoken commands during a run (the mic button on the run screen,
-  off until you turn it on): "start the next block", "next", "pause",
+- Optional spoken commands (a mic toggle on the run screen and on the home
+  screen, off until you turn it on): "start the next block", "next", "pause",
   "resume", "how long", and "end the workout". Recognition runs on-device
   where the phone supports it, so it works without signal, and anything heard
   while the app is talking is ignored so its own call-outs can't trigger a

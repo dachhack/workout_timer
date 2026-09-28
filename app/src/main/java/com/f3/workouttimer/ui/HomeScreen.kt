@@ -1,7 +1,9 @@
 package com.f3.workouttimer.ui
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -30,6 +32,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RecordVoiceOver
@@ -46,6 +50,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -58,6 +63,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,18 +73,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.f3.workouttimer.BuildConfig
 import com.f3.workouttimer.audio.WorkoutSounds
+import com.f3.workouttimer.data.BanterRepository
 import com.f3.workouttimer.data.PaxPhotoStore
 import com.f3.workouttimer.data.TimerRepository
 import com.f3.workouttimer.data.TimerShare
 import com.f3.workouttimer.data.UpdateChecker
 import com.f3.workouttimer.model.AppUpdate
+import com.f3.workouttimer.model.VoiceCommand
+import com.f3.workouttimer.model.matchCustomReply
+import com.f3.workouttimer.model.parseVoiceCommand
 import com.f3.workouttimer.model.updateAvailable
 import com.f3.workouttimer.model.WorkoutTimer
 import com.f3.workouttimer.model.formatDuration
 import com.f3.workouttimer.timer.TimerService
+import com.f3.workouttimer.voice.VoiceCommands
 import com.f3.workouttimer.ui.theme.F3Black
 import com.f3.workouttimer.ui.theme.F3Gray
 import com.f3.workouttimer.ui.theme.F3White
@@ -111,6 +123,51 @@ fun HomeScreen(
     DisposableEffect(Unit) { onDispose { localSounds.value?.release() } }
     fun sounds(): WorkoutSounds =
         localSounds.value ?: WorkoutSounds(context).also { localSounds.value = it }
+
+    // Voice works here too, for the countdown and the custom replies. The rest
+    // of the commands steer a run, and there is none on this screen.
+    val banterRepo = remember { BanterRepository.get(context) }
+    val replies by banterRepo.replies.collectAsStateWithLifecycle(initialValue = emptyList())
+    val latestReplies = rememberUpdatedState(replies)
+
+    val voice = remember {
+        VoiceCommands(
+            context = context,
+            isAppSpeaking = { localSounds.value?.isSpeaking == true },
+            onHeard = { candidates ->
+                val banter = candidates.firstNotNullOfOrNull {
+                    matchCustomReply(it, latestReplies.value)
+                }
+                when {
+                    banter != null -> {
+                        sounds().speak(banter.reply)
+                        banter.trigger
+                    }
+                    candidates.any { parseVoiceCommand(it) == VoiceCommand.COUNTDOWN } -> {
+                        lightsRun++
+                        "count me down"
+                    }
+                    else -> null
+                }
+            },
+        )
+    }
+    DisposableEffect(voice) { onDispose { voice.release() } }
+
+    val micPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> if (granted) voice.start() }
+
+    val toggleListening = {
+        if (voice.isListening) {
+            voice.stop()
+        } else {
+            val granted = ContextCompat.checkSelfPermission(
+                context, Manifest.permission.RECORD_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED
+            if (granted) voice.start() else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
 
     // A newer published build, if there is one and we could reach it.
     var update by remember { mutableStateOf<AppUpdate?>(null) }
@@ -154,7 +211,20 @@ fun HomeScreen(
                     onImport = { importPrefill = "" },
                     onSchedule = onSchedule,
                     onBanter = onBanter,
+                )
+            }
+            item {
+                QuickActions(
+                    listening = voice.isListening,
+                    note = when {
+                        voice.problem.isNotBlank() -> voice.problem
+                        voice.isListening && voice.lastHeard.isNotBlank() ->
+                            "Heard: ${voice.lastHeard}"
+                        voice.isListening -> "Listening — say \"count me down\""
+                        else -> ""
+                    },
                     onCountdown = { lightsRun++ },
+                    onToggleListening = toggleListening,
                 )
             }
             update?.takeIf { !updateDismissed }?.let { latest ->
@@ -318,7 +388,6 @@ private fun F3Header(
     onImport: () -> Unit,
     onSchedule: () -> Unit,
     onBanter: () -> Unit,
-    onCountdown: () -> Unit,
 ) {
     Box(
         modifier = Modifier
@@ -344,13 +413,6 @@ private fun F3Header(
             )
         }
         Row(modifier = Modifier.align(Alignment.TopEnd)) {
-            IconButton(onClick = onCountdown) {
-                Icon(
-                    Icons.Default.Traffic,
-                    contentDescription = "Starting lights",
-                    tint = LightGreen,
-                )
-            }
             IconButton(onClick = onSchedule) {
                 Icon(Icons.Default.Alarm, contentDescription = "Schedule", tint = F3Gray)
             }
@@ -671,4 +733,51 @@ private fun UpdateDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Later") } },
     )
+}
+
+/** The two things worth doing from here without opening a workout. */
+@Composable
+private fun QuickActions(
+    listening: Boolean,
+    note: String,
+    onCountdown: () -> Unit,
+    onToggleListening: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedButton(
+                onClick = onCountdown,
+                modifier = Modifier.weight(1f).height(52.dp),
+            ) {
+                Icon(Icons.Default.Traffic, contentDescription = null, tint = LightGreen)
+                Spacer(Modifier.width(8.dp))
+                Text("COUNT DOWN", letterSpacing = 1.sp, fontWeight = FontWeight.Bold)
+            }
+            // Listening needs to be visible at a glance, which is why this is a
+            // button here rather than another icon in the header.
+            Button(
+                onClick = onToggleListening,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (listening) F3White else MaterialTheme.colorScheme.surface,
+                    contentColor = if (listening) F3Black else F3Gray,
+                ),
+                modifier = Modifier.weight(1f).height(52.dp),
+            ) {
+                Icon(
+                    if (listening) Icons.Default.Mic else Icons.Default.MicOff,
+                    contentDescription = null,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    if (listening) "LISTENING" else "LISTEN",
+                    letterSpacing = 1.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
+        if (note.isNotBlank()) {
+            Text(note, color = F3Gray, fontSize = 12.sp, textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth())
+        }
+    }
 }
