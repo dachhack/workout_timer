@@ -18,15 +18,43 @@ android {
         versionName = "1.1"
     }
 
+    // The signing key comes from the environment — CI decodes it from an
+    // encrypted secret, and it is never committed. See README > Signing.
+    val signingStore = System.getenv("SIGNING_STORE_FILE")
+    val hasSigningKey = !signingStore.isNullOrBlank() && file(signingStore).exists()
+
+    signingConfigs {
+        if (hasSigningKey) {
+            create("shared") {
+                storeFile = file(signingStore!!)
+                storePassword = System.getenv("SIGNING_STORE_PASSWORD")
+                keyAlias = System.getenv("SIGNING_KEY_ALIAS") ?: "f3timer"
+                keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            // Falling back to the debug key keeps local release builds runnable;
+            // only a build with the shared key is fit to hand round, since
+            // Android refuses an update whose signature changed.
+            signingConfig = if (hasSigningKey) {
+                signingConfigs.getByName("shared")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
         }
+        debug {
+            if (hasSigningKey) signingConfig = signingConfigs.getByName("shared")
+        }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

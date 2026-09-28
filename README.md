@@ -106,6 +106,19 @@ with 3-2-1 beeps into each change.
   signal, no published manifest — are silent; there is simply no banner.
 - F3 black-and-white branding throughout.
 
+## Getting the app
+
+**[Download the latest APK](https://github.com/dachhack/workout_timer/releases/latest/download/f3-workout-timer.apk)**
+
+That link is permanent — it always serves the newest published build, so it
+is the one to share with the PAX. Or send them the
+[releases page](https://github.com/dachhack/workout_timer/releases/latest),
+which shows what changed next to the download.
+
+On the phone: open the downloaded file and allow installing from that source
+when Android asks. Updates install over the top and saved timers survive, so
+long as every build is signed with the same key — see Signing below.
+
 ## Publishing a build
 
 `update.json` at the repository root describes the newest build, and the app
@@ -120,11 +133,43 @@ reads it from the default branch:
 }
 ```
 
-To publish: bump `versionCode` and `versionName` in `app/build.gradle.kts`,
-build the APK, put it (or a zip of it) somewhere downloadable — a GitHub
-release is the easy option — then set the same version and that link in
-`update.json` and push. Phones running an older build show the banner the
-next time the home screen opens.
+Publishing is automatic. Bump `versionCode` and `versionName` in
+`app/build.gradle.kts`, set the matching `versionName` and fresh `notes` in
+`update.json`, and push to the default branch: GitHub Actions
+(`.github/workflows/publish.yml`) runs the tests, builds a signed release
+APK, and replaces the `latest` release with it. Phones on an older build show
+the update banner the next time the home screen opens.
+
+Pushes to other branches build and test but publish nothing; the APK is left
+as a workflow artifact.
+
+### Signing — one-time setup
+
+Android refuses an update whose signature changed, so every build has to be
+signed with the same key or the PAX have to uninstall and lose their timers.
+Android generates a throwaway debug key per machine, which is no good across
+a laptop and a CI runner, so CI signs with a key you generate once and store
+as an encrypted secret. It is never committed — `signing/` and `*.keystore`
+are in `.gitignore`.
+
+Run this locally, keep `release.keystore` somewhere safe (a password
+manager), and never commit it:
+
+```sh
+keytool -genkeypair -v -keystore release.keystore \
+  -alias f3timer -keyalg RSA -keysize 2048 -validity 10950 \
+  -storepass "CHOOSE_A_PASSWORD" -keypass "CHOOSE_A_PASSWORD" \
+  -dname "CN=F3 Workout Timer, O=F3, C=US"
+
+gh secret set SIGNING_KEYSTORE_BASE64 < <(base64 -w0 release.keystore)
+gh secret set SIGNING_STORE_PASSWORD --body "CHOOSE_A_PASSWORD"
+gh secret set SIGNING_KEY_PASSWORD   --body "CHOOSE_A_PASSWORD"
+gh secret set SIGNING_KEY_ALIAS      --body "f3timer"
+```
+
+Until those secrets exist the publish job fails on purpose rather than
+shipping an APK nobody can upgrade to. Local builds need no setup — they
+fall back to the debug key, which is fine for testing but not for sharing.
 
 ## Building
 
