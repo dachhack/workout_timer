@@ -2,6 +2,7 @@ package com.f3.workouttimer.model
 
 import kotlinx.serialization.Serializable
 import java.util.UUID
+import kotlin.random.Random
 
 enum class StageType(val label: String, val defaultAnnouncement: String) {
     WORK("WORK", "Work"),
@@ -39,6 +40,8 @@ data class Block(
     val transition: Stage = Stage(enabled = false, seconds = 10),
     /** Exercises run in order within each round; empty = one plain work interval. */
     val exercises: List<String> = emptyList(),
+    /** Up to [MAX_PHRASES] lines, each said once per run halfway through a random work set. */
+    val phrases: List<String> = emptyList(),
 ) {
     fun stage(type: StageType): Stage = when (type) {
         StageType.WORK -> work
@@ -113,6 +116,38 @@ data class WorkoutTimer(
 }
 
 const val DEFAULT_OPENING = "Get ready"
+const val MAX_PHRASES = 6
+
+/** Work sets shorter than this are over too quickly to talk in the middle of. */
+const val MIN_PHRASE_SET_SECONDS = 10
+
+/**
+ * Decides which work sets get a mid-set phrase, and which phrase: interval
+ * index → phrase. Each block's phrases are shuffled and scattered over that
+ * block's work sets, so every phrase is said once and none repeats. A block
+ * with more phrases than sets says only as many as it has sets.
+ */
+fun planPhrases(
+    intervals: List<Interval>,
+    blocks: List<Block>,
+    random: Random = Random,
+): Map<Int, String> {
+    val plan = mutableMapOf<Int, String>()
+    intervals.withIndex()
+        .filter { it.value.type == StageType.WORK && it.value.seconds >= MIN_PHRASE_SET_SECONDS }
+        .groupBy { it.value.blockIndex }
+        .forEach { (blockIndex, sets) ->
+            val phrases = blocks.getOrNull(blockIndex)?.phrases.orEmpty()
+                .map(String::trim)
+                .filter(String::isNotEmpty)
+                .distinctBy(String::lowercase)
+                .take(MAX_PHRASES)
+                .shuffled(random)
+            val chosen = sets.shuffled(random).take(phrases.size)
+            chosen.zip(phrases).forEach { (set, phrase) -> plan[set.index] = phrase }
+        }
+    return plan
+}
 const val DEFAULT_CLOSING = "Workout complete. Nice work."
 
 data class Interval(
