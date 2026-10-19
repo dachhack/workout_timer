@@ -67,6 +67,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -408,6 +409,16 @@ fun HomeScreen(
 }
 
 @Composable
+private fun VersionLabel(modifier: Modifier = Modifier) {
+    Text(
+        text = "v${BuildConfig.VERSION_NAME}",
+        color = F3Gray,
+        fontSize = 12.sp,
+        modifier = modifier,
+    )
+}
+
+@Composable
 private fun F3Header(
     onPhotos: () -> Unit,
     onImport: () -> Unit,
@@ -423,7 +434,12 @@ private fun F3Header(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            F3Mark()
+            // An invisible twin on the left keeps the mark itself centred.
+            Row(verticalAlignment = Alignment.Bottom) {
+                VersionLabel(Modifier.alpha(0f))
+                F3Mark(Modifier.padding(horizontal = 8.dp))
+                VersionLabel()
+            }
             Spacer(Modifier.height(12.dp))
             Text(
                 text = "WORKOUT TIMER",
