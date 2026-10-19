@@ -140,8 +140,11 @@ data class Interval(
     /** What gets spoken when this interval starts. */
     val announcement: String
         get() = when (type) {
-            StageType.WORK -> exercise.ifBlank {
-                message.ifBlank { blockName.ifBlank { type.defaultAnnouncement } }
+            // The stage message leads into the exercise rather than being lost behind it.
+            StageType.WORK -> when {
+                exercise.isNotBlank() && message.isNotBlank() -> "$message. $exercise"
+                exercise.isNotBlank() -> exercise
+                else -> message.ifBlank { blockName.ifBlank { type.defaultAnnouncement } }
             }
             else -> message.ifBlank { type.defaultAnnouncement }
         }
