@@ -54,7 +54,8 @@ class WorkoutSounds(context: Context, val engineName: String = "") {
     var isSpeaking by mutableStateOf(false)
         private set
 
-    private var pendingVoiceName: String? = null
+    /** The voice every line is said in ([Voice.getName]); blank = engine default. */
+    private var voiceName = ""
 
     private val appContext = context.applicationContext
     private val audioManager = appContext.getSystemService(AudioManager::class.java)
@@ -87,16 +88,18 @@ class WorkoutSounds(context: Context, val engineName: String = "") {
     private val tts: TextToSpeech = TextToSpeech(
         appContext,
         { status ->
-            ready.complete(status == TextToSpeech.SUCCESS)
             if (status == TextToSpeech.SUCCESS) {
                 isReady = true
                 runCatching {
                     tts.language = Locale.getDefault()
                     tts.setAudioAttributes(audioAttributes)
                 }
-                pendingVoiceName?.let { applyVoice(it) }
-                pendingVoiceName = null
+                applyVoice(voiceName)
             }
+            // Last, because completing this can start the first queued line on
+            // the spot; set up any earlier and that line comes out in the
+            // engine's default voice.
+            ready.complete(status == TextToSpeech.SUCCESS)
         },
         engineName.ifBlank { null },
     ).apply {
@@ -147,11 +150,8 @@ class WorkoutSounds(context: Context, val engineName: String = "") {
 
     /** Select a voice by its [Voice.getName]; blank restores the engine default. */
     fun setVoiceByName(name: String) {
-        if (!isReady) {
-            pendingVoiceName = name
-            return
-        }
-        applyVoice(name)
+        voiceName = name
+        if (isReady) applyVoice(name)
     }
 
     private fun applyVoice(name: String) {
@@ -205,6 +205,10 @@ class WorkoutSounds(context: Context, val engineName: String = "") {
     private suspend fun utter(text: String) {
         val engineReady = withTimeoutOrNull(READY_TIMEOUT_MS) { ready.await() } ?: false
         if (!engineReady) return
+        // Check every line rather than trusting the engine kept the voice it was given.
+        if (voiceName.isNotBlank() && runCatching { tts.voice?.name }.getOrNull() != voiceName) {
+            applyVoice(voiceName)
+        }
         val id = "f3-${System.nanoTime()}"
         val done = CompletableDeferred<Unit>()
         synchronized(this) { completions[id] = done }
