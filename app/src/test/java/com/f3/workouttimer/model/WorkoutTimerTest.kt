@@ -83,7 +83,7 @@ class WorkoutTimerTest {
     }
 
     @Test
-    fun `an exercise outranks the stage message on work intervals`() {
+    fun `a work message is spoken ahead of the exercise`() {
         val block = Block(
             name = "Weights",
             rounds = 1,
@@ -94,7 +94,7 @@ class WorkoutTimerTest {
         )
         val intervals = block.intervals()
 
-        assertEquals("Curls", intervals[0].announcement)
+        assertEquals("Lift. Curls", intervals[0].announcement)
         assertEquals("Breathe", intervals[1].announcement)
     }
 
