@@ -10,6 +10,7 @@ import com.f3.workouttimer.audio.WorkoutSounds
 import com.f3.workouttimer.model.Interval
 import com.f3.workouttimer.model.StageType
 import com.f3.workouttimer.model.WorkoutTimer
+import com.f3.workouttimer.model.planPhrases
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -34,6 +35,9 @@ class TimerEngine(
 ) {
     val intervals: List<Interval> = timer.intervals()
     val totalSeconds: Int = intervals.sumOf { it.seconds }
+
+    /** Mid-set phrases for this run, drawn once so none repeats. */
+    private val phrasePlan: Map<Int, String> = planPhrases(intervals, timer.blocks)
 
     var phase by mutableStateOf(RunPhase.READY)
         private set
@@ -79,7 +83,7 @@ class TimerEngine(
                 phase = RunPhase.RUNNING
                 sounds.stageBeep()
                 sounds.speak(announcementFor(i))
-                countdown(intervals[i].seconds)
+                countdown(intervals[i].seconds, midway = phrasePlan[i])
                 // A jump past the last interval simply ends the workout.
                 i = jumpTo?.also { jumpTo = null } ?: (i + 1)
             }
@@ -160,11 +164,13 @@ class TimerEngine(
         job?.cancel()
     }
 
-    private suspend fun countdown(seconds: Int) {
+    /** Runs the clock down from [seconds], saying [midway] once half of it has gone. */
+    private suspend fun countdown(seconds: Int, midway: String? = null) {
         skipRequested = false
         var remaining = seconds * 1000L
         remainingMs = remaining
         var lastWhole = seconds
+        var midwaySaid = false
         while (remaining > 0 && !skipRequested) {
             paused.first { !it }
             val tickStart = SystemClock.elapsedRealtime()
@@ -172,6 +178,10 @@ class TimerEngine(
             if (paused.value) continue
             remaining = (remaining - (SystemClock.elapsedRealtime() - tickStart)).coerceAtLeast(0)
             remainingMs = remaining
+            if (midway != null && !midwaySaid && remaining <= seconds * 500L) {
+                midwaySaid = true
+                sounds.speak(midway)
+            }
             val whole = ceil(remaining / 1000.0).toInt()
             if (whole < lastWhole) {
                 lastWhole = whole

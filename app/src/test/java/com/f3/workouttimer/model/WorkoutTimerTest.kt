@@ -3,6 +3,7 @@ package com.f3.workouttimer.model
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.random.Random
 
 class WorkoutTimerTest {
 
@@ -156,5 +157,45 @@ class WorkoutTimerTest {
 
         assertTrue(timer.intervals().isEmpty())
         assertEquals(0, timer.totalSeconds())
+    }
+
+    @Test
+    fun `each phrase is said once, on a work set of its own block`() {
+        val phrases = listOf("One", "Two", "Three")
+        val timer = WorkoutTimer(
+            blocks = listOf(
+                circuit("A", rounds = 3, exercises = listOf("X", "Y")).copy(phrases = phrases),
+                circuit("B", rounds = 2, exercises = listOf("Z")),
+            ),
+        )
+        val intervals = timer.intervals()
+        repeat(20) { seed ->
+            val plan = planPhrases(intervals, timer.blocks, Random(seed))
+            assertEquals(phrases.sorted(), plan.values.sorted())
+            plan.keys.forEach { i ->
+                assertEquals(StageType.WORK, intervals[i].type)
+                assertEquals(0, intervals[i].blockIndex)
+            }
+        }
+    }
+
+    @Test
+    fun `phrases run out rather than repeat when a block has few sets`() {
+        val block = circuit("A", rounds = 2, exercises = emptyList())
+            .copy(phrases = listOf("One", "Two", "Three", "one", " "))
+        val timer = WorkoutTimer(blocks = listOf(block))
+        val plan = planPhrases(timer.intervals(), timer.blocks, Random(1))
+
+        assertEquals(2, plan.size)
+        assertEquals(2, plan.values.toSet().size)
+    }
+
+    @Test
+    fun `short work sets get no phrase`() {
+        val block = circuit("A", rounds = 4, exercises = emptyList(), work = MIN_PHRASE_SET_SECONDS - 1)
+            .copy(phrases = listOf("One"))
+        val timer = WorkoutTimer(blocks = listOf(block))
+
+        assertTrue(planPhrases(timer.intervals(), timer.blocks).isEmpty())
     }
 }
