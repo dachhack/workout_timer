@@ -1,11 +1,8 @@
 {
-  "versionCode": 3,
-  "versionName": "1.2",
+  "versionCode": 4,
+  "versionName": "1.3",
   "notes": [
-    "Mid-set phrases: up to six per block, said halfway through random sets, never repeated",
-    "A work stage's spoken message is now said along with the exercise",
-    "Opening and closing messages use the voice you picked",
-    "The version number shows beside the F3 logo"
+    "New switch: say the exercise before the work message (\"Burpees. Go!\") instead of after"
   ],
   "downloadUrl": "https://github.com/dachhack/workout_timer/releases/latest/download/f3-workout-timer.apk"
 }
