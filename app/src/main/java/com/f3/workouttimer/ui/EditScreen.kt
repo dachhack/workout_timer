@@ -289,15 +289,15 @@ private fun EditForm(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(
-                                "EXERCISE BEFORE WORK MESSAGE",
+                                "CALL EXERCISE BEFORE COUNTDOWN",
                                 fontWeight = FontWeight.Black,
                                 letterSpacing = 2.sp,
                             )
                             Text(
                                 if (exerciseBeforeMessage) {
-                                    "\"Burpees. Go!\""
+                                    "\"Next up: Burpees\" … \"Burpees\" … 3, 2, 1 … \"Go!\""
                                 } else {
-                                    "Off: \"Go! Burpees\""
+                                    "Off: the set opens with \"Go! Burpees\""
                                 },
                                 color = F3Gray,
                                 fontSize = 12.sp,

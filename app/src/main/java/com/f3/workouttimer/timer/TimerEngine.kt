@@ -23,6 +23,12 @@ enum class RunPhase { READY, LEAD_IN, RUNNING, FINISHED }
 
 private const val LEAD_IN_SECONDS = 5
 
+/** How long before a stage ends to call the coming exercise, ahead of the 3-2-1. */
+private const val CALL_BEFORE_END_MS = 6_000L
+
+/** The gap between "Next up: Burpees" and "Burpees" when the lead-in carries both. */
+private const val CALL_GAP_MS = 1_000L
+
 /**
  * Drives one workout run. All mutable properties are Compose state, so the run
  * screen recomposes as the clock ticks.
@@ -76,14 +82,20 @@ class TimerEngine(
             // so a long one is never talked over by the first work interval.
             remainingMs = LEAD_IN_SECONDS * 1000L
             sounds.speakAndWait(timer.opening)
-            countdown(LEAD_IN_SECONDS)
+            // The first set has no break before it, so the lead-in does the break's job.
+            val firstCall = exerciseCallBefore(-1)
+            if (firstCall != null) {
+                sounds.speakAndWait("Next up: $firstCall")
+                delay(CALL_GAP_MS)
+            }
+            countdown(LEAD_IN_SECONDS, beforeEnd = firstCall)
             var i = 0
             while (i < intervals.size) {
                 currentIndex = i
                 phase = RunPhase.RUNNING
                 sounds.stageBeep()
                 sounds.speak(announcementFor(i))
-                countdown(intervals[i].seconds, midway = phrasePlan[i])
+                countdown(intervals[i].seconds, midway = phrasePlan[i], beforeEnd = exerciseCallBefore(i))
                 // A jump past the last interval simply ends the workout.
                 i = jumpTo?.also { jumpTo = null } ?: (i + 1)
             }
@@ -111,11 +123,25 @@ class TimerEngine(
         return if (worthShowing) next.displayLabel else ""
     }
 
+    /**
+     * The exercise to call as [index] runs out, when the workout calls exercises
+     * before their countdown and the next stage is a set with one. -1 is the lead-in.
+     */
+    private fun exerciseCallBefore(index: Int): String? {
+        if (!timer.exerciseBeforeMessage) return null
+        val next = intervals.getOrNull(index + 1) ?: return null
+        return next.exercise.takeIf { next.type == StageType.WORK && it.isNotBlank() }
+    }
+
     private fun announcementFor(index: Int): String {
         val interval = intervals[index]
         val base = interval.announcement
         // Name the block when the run crosses into a new one.
-        val startsBlock = index == 0 || intervals[index - 1].blockIndex != interval.blockIndex
+        // A set whose exercise was called before the countdown opens on "Go!" alone.
+        val calledAhead = timer.exerciseBeforeMessage &&
+            interval.type == StageType.WORK && interval.exercise.isNotBlank()
+        val startsBlock = !calledAhead &&
+            (index == 0 || intervals[index - 1].blockIndex != interval.blockIndex)
         val withBlock =
             if (startsBlock && interval.blockName.isNotBlank() &&
                 !base.equals(interval.blockName, ignoreCase = true)
@@ -125,7 +151,7 @@ class TimerEngine(
                 base
             }
         val isBreak = interval.type == StageType.REST || interval.type == StageType.TRANSITION
-        if (timer.announceNextExercise && isBreak) {
+        if ((timer.announceNextExercise || timer.exerciseBeforeMessage) && isBreak) {
             val next = upNextLabel(index)
             if (next.isNotBlank()) return "$withBlock. Next up: $next"
         }
@@ -164,13 +190,17 @@ class TimerEngine(
         job?.cancel()
     }
 
-    /** Runs the clock down from [seconds], saying [midway] once half of it has gone. */
-    private suspend fun countdown(seconds: Int, midway: String? = null) {
+    /**
+     * Runs the clock down from [seconds], saying [midway] once half of it has
+     * gone and [beforeEnd] as it nears the 3-2-1.
+     */
+    private suspend fun countdown(seconds: Int, midway: String? = null, beforeEnd: String? = null) {
         skipRequested = false
         var remaining = seconds * 1000L
         remainingMs = remaining
         var lastWhole = seconds
         var midwaySaid = false
+        var beforeEndSaid = false
         while (remaining > 0 && !skipRequested) {
             paused.first { !it }
             val tickStart = SystemClock.elapsedRealtime()
@@ -181,6 +211,10 @@ class TimerEngine(
             if (midway != null && !midwaySaid && remaining <= seconds * 500L) {
                 midwaySaid = true
                 sounds.speak(midway)
+            }
+            if (beforeEnd != null && !beforeEndSaid && remaining <= CALL_BEFORE_END_MS) {
+                beforeEndSaid = true
+                sounds.speak(beforeEnd)
             }
             val whole = ceil(remaining / 1000.0).toInt()
             if (whole < lastWhole) {
