@@ -14,8 +14,8 @@ android {
         minSdk = 26
         targetSdk = 35
         // Bump both of these and update.json together when publishing a build.
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 4
+        versionName = "1.3"
     }
 
     // The signing key comes from the environment — CI decodes it from an
