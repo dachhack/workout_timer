@@ -1,8 +1,8 @@
 {
-  "versionCode": 4,
-  "versionName": "1.3",
+  "versionCode": 5,
+  "versionName": "1.4",
   "notes": [
-    "New switch: say the exercise before the work message (\"Burpees. Go!\") instead of after"
+    "\"Call exercise before countdown\" now runs: \"Next up: Burpees\" at the start of the rest, \"Burpees\" just before the 3-2-1, then \"Go!\" as the set starts, including the first set"
   ],
   "downloadUrl": "https://github.com/dachhack/workout_timer/releases/latest/download/f3-workout-timer.apk"
 }
