@@ -100,6 +100,19 @@ class WorkoutTimerTest {
     }
 
     @Test
+    fun `the exercise can be said before the work message`() {
+        val block = Block(
+            rounds = 1,
+            work = Stage(enabled = true, seconds = 45, message = "Go"),
+            rest = Stage(enabled = false, seconds = 0),
+            exercises = listOf("Burpees"),
+        )
+        val timer = WorkoutTimer(blocks = listOf(block), exerciseBeforeMessage = true)
+
+        assertEquals("Burpees. Go", timer.intervals()[0].announcement)
+    }
+
+    @Test
     fun `a compound station is one work interval covering several movements`() {
         val block = circuit(
             "Core",

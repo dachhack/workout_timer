@@ -121,6 +121,9 @@ private fun EditForm(
     var announceNextExercise by remember(initial.id) {
         mutableStateOf(initial.announceNextExercise)
     }
+    var exerciseBeforeMessage by remember(initial.id) {
+        mutableStateOf(initial.exerciseBeforeMessage)
+    }
     var openingMessage by remember(initial.id) { mutableStateOf(initial.openingMessage) }
     var closingMessage by remember(initial.id) { mutableStateOf(initial.closingMessage) }
     var voiceName by remember(initial.id) { mutableStateOf(initial.voiceName) }
@@ -137,6 +140,7 @@ private fun EditForm(
         name = name.ifBlank { "Beatdown" },
         blocks = blocks,
         announceNextExercise = announceNextExercise,
+        exerciseBeforeMessage = exerciseBeforeMessage,
         openingMessage = openingMessage,
         closingMessage = closingMessage,
         voiceName = voiceName,
@@ -276,6 +280,32 @@ private fun EditForm(
                         Switch(
                             checked = announceNextExercise,
                             onCheckedChange = { announceNextExercise = it },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = F3Black,
+                                checkedTrackColor = F3White,
+                            ),
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "EXERCISE BEFORE WORK MESSAGE",
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 2.sp,
+                            )
+                            Text(
+                                if (exerciseBeforeMessage) {
+                                    "\"Burpees. Go!\""
+                                } else {
+                                    "Off: \"Go! Burpees\""
+                                },
+                                color = F3Gray,
+                                fontSize = 12.sp,
+                            )
+                        }
+                        Switch(
+                            checked = exerciseBeforeMessage,
+                            onCheckedChange = { exerciseBeforeMessage = it },
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = F3Black,
                                 checkedTrackColor = F3White,
