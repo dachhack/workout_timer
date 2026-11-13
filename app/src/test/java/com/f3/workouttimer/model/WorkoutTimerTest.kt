@@ -100,7 +100,7 @@ class WorkoutTimerTest {
     }
 
     @Test
-    fun `the exercise can be said before the work message`() {
+    fun `a set whose exercise was called ahead opens on the work message alone`() {
         val block = Block(
             rounds = 1,
             work = Stage(enabled = true, seconds = 45, message = "Go"),
@@ -109,7 +109,7 @@ class WorkoutTimerTest {
         )
         val timer = WorkoutTimer(blocks = listOf(block), exerciseBeforeMessage = true)
 
-        assertEquals("Burpees. Go", timer.intervals()[0].announcement)
+        assertEquals("Go", timer.intervals()[0].announcement)
     }
 
     @Test

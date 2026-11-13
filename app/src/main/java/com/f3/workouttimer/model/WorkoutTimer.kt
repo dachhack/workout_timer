@@ -99,7 +99,11 @@ data class WorkoutTimer(
     val closingMessage: String = "",
     /** Speak the coming exercise during rest and transition, so the PAX can set up. */
     val announceNextExercise: Boolean = true,
-    /** On work sets with both, say the exercise before the work message instead of after. */
+    /**
+     * Call each exercise before its countdown rather than at the start of the
+     * set: "Next up: Burpees" as the break begins, "Burpees" just before the
+     * 3-2-1, then only the work message ("Go!") once the set starts.
+     */
     val exerciseBeforeMessage: Boolean = false,
     /** TTS voice name ([android.speech.tts.Voice.getName]); blank = engine default. */
     val voiceName: String = "",
@@ -169,7 +173,7 @@ data class Interval(
     val blockName: String = "",
     val blockIndex: Int = 0,
     val blockCount: Int = 1,
-    /** Say [exercise] before [message] when a work set has both. */
+    /** The exercise was already called before the countdown, so the set opens on [message] alone. */
     val exerciseFirst: Boolean = false,
 ) {
     /** The headline on the run screen: the exercise, else the block, else the stage. */
@@ -186,10 +190,10 @@ data class Interval(
     /** What gets spoken when this interval starts. */
     val announcement: String
         get() = when (type) {
-            // Both are said rather than one hiding the other; the order is the workout's choice.
+            // Both are said rather than one hiding the other.
             StageType.WORK -> when {
-                exercise.isNotBlank() && message.isNotBlank() ->
-                    if (exerciseFirst) "$exercise. $message" else "$message. $exercise"
+                exercise.isNotBlank() && exerciseFirst -> message.ifBlank { type.defaultAnnouncement }
+                exercise.isNotBlank() && message.isNotBlank() -> "$message. $exercise"
                 exercise.isNotBlank() -> exercise
                 else -> message.ifBlank { blockName.ifBlank { type.defaultAnnouncement } }
             }
