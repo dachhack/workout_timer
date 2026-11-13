@@ -52,7 +52,11 @@ data class Block(
     /** The stations of one round: the exercise list, or a single unnamed station. */
     fun stations(): List<String> = exercises.ifEmpty { listOf("") }
 
-    fun intervals(blockIndex: Int = 0, blockCount: Int = 1): List<Interval> {
+    fun intervals(
+        blockIndex: Int = 0,
+        blockCount: Int = 1,
+        exerciseFirst: Boolean = false,
+    ): List<Interval> {
         val result = mutableListOf<Interval>()
         for (round in 1..rounds) {
             for (exercise in stations()) {
@@ -70,6 +74,7 @@ data class Block(
                                 blockName = name,
                                 blockIndex = blockIndex,
                                 blockCount = blockCount,
+                                exerciseFirst = exerciseFirst,
                             )
                         )
                     }
@@ -94,6 +99,8 @@ data class WorkoutTimer(
     val closingMessage: String = "",
     /** Speak the coming exercise during rest and transition, so the PAX can set up. */
     val announceNextExercise: Boolean = true,
+    /** On work sets with both, say the exercise before the work message instead of after. */
+    val exerciseBeforeMessage: Boolean = false,
     /** TTS voice name ([android.speech.tts.Voice.getName]); blank = engine default. */
     val voiceName: String = "",
     /** TTS engine package name; blank = the device's default engine. */
@@ -101,7 +108,9 @@ data class WorkoutTimer(
 ) {
     /** Every block's intervals back to back, trimmed so the workout ends on work. */
     fun intervals(): List<Interval> {
-        val all = blocks.flatMapIndexed { i, b -> b.intervals(i, blocks.size) }
+        val all = blocks.flatMapIndexed { i, b ->
+            b.intervals(i, blocks.size, exerciseFirst = exerciseBeforeMessage)
+        }
         val trimmed = all.dropLastWhile { it.type != StageType.WORK }
         return if (trimmed.isEmpty()) all else trimmed
     }
@@ -160,6 +169,8 @@ data class Interval(
     val blockName: String = "",
     val blockIndex: Int = 0,
     val blockCount: Int = 1,
+    /** Say [exercise] before [message] when a work set has both. */
+    val exerciseFirst: Boolean = false,
 ) {
     /** The headline on the run screen: the exercise, else the block, else the stage. */
     val displayLabel: String
@@ -175,9 +186,10 @@ data class Interval(
     /** What gets spoken when this interval starts. */
     val announcement: String
         get() = when (type) {
-            // The stage message leads into the exercise rather than being lost behind it.
+            // Both are said rather than one hiding the other; the order is the workout's choice.
             StageType.WORK -> when {
-                exercise.isNotBlank() && message.isNotBlank() -> "$message. $exercise"
+                exercise.isNotBlank() && message.isNotBlank() ->
+                    if (exerciseFirst) "$exercise. $message" else "$message. $exercise"
                 exercise.isNotBlank() -> exercise
                 else -> message.ifBlank { blockName.ifBlank { type.defaultAnnouncement } }
             }
